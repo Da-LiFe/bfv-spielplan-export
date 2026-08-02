@@ -215,6 +215,18 @@ def test_build_html(tmp_path):
     assert "1 Tage mit mehreren Spielen" in html
     assert "google.com/maps" in html
     assert "Datenquelle:" in html
+    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
+    assert 'class="table-wrap"' in html
+    assert 'data-label="Heim"' in html
+    assert 'data-label="Gast"' in html
+    assert 'data-label="Spielort"' in html
+    assert 'data-label="Zeit"' in html
+    assert 'data-label="Wettbewerb"' in html
+    assert 'data-label="Spiel"' in html
+    assert '<span class="cell"' in html
+    assert "@media (max-width: 640px)" in html
+    assert "grid-template-columns:92px 1fr" in html
+    assert "thead" in html
 
 
 # --------------------------------------------------------------- build_pdf()

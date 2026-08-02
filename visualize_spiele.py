@@ -139,25 +139,25 @@ def build_html(days, club_teams, sources, out_path):
             map_html = f'<a class="map" href="{maps_url(place)}" target="_blank">Karte ↗</a>' if place else ""
             rows_html.append(
                 f'<tr class="{"hot" if is_hot else ""}" data-heim="{esc(g["heim"])}" data-gast="{esc(g["gast"])}">'
-                f'<td class="time">{esc(g["time"] or "–")}</td>'
-                f'<td class="team" style="color:{g["home_color"]}">{esc(g["heim"])}</td>'
-                f'<td class="vs">vs</td>'
-                f'<td class="team" style="color:{g["away_color"]}">{esc(g["gast"])}</td>'
-                f'<td class="comp">{esc(g["wettbewerb"])}</td>'
-                f'<td class="place"><span class="addr">{esc(place)}</span>{map_html}</td>'
-                f'<td class="home">{home_tag}</td>'
-                f'<td>{link_html}</td>'
+                f'<td class="time" data-label="Zeit"><span class="cell">{esc(g["time"] or "–")}</span></td>'
+                f'<td class="team" data-label="Heim"><span class="cell" style="color:{g["home_color"]}">{esc(g["heim"])}</span></td>'
+                f'<td class="vs" data-label=""><span class="cell">vs</span></td>'
+                f'<td class="team" data-label="Gast"><span class="cell" style="color:{g["away_color"]}">{esc(g["gast"])}</span></td>'
+                f'<td class="comp" data-label="Wettbewerb"><span class="cell">{esc(g["wettbewerb"])}</span></td>'
+                f'<td class="place" data-label="Spielort"><span class="cell"><span class="addr">{esc(place)}</span>{map_html}</span></td>'
+                f'<td class="home" data-label=""><span class="cell">{home_tag}</span></td>'
+                f'<td data-label="Spiel"><span class="cell">{link_html}</span></td>'
                 f'</tr>'
             )
         sections.append(
             f'<section class="day" data-datum="{esc(datum)}">'
             f'<div class="{header_cls}"><span class="when">{esc(games[0]["wd"])}, {esc(datum)}</span>{badge}</div>'
-            f'<table><colgroup>'
+            f'<div class="table-wrap"><table><colgroup>'
             f'<col style="width:4%"><col style="width:23%"><col style="width:3%"><col style="width:23%">'
             f'<col style="width:12%"><col style="width:24%"><col style="width:3%"><col style="width:8%">'
             f'</colgroup><thead><tr>'
             f'<th>Zeit</th><th>Heim</th><th></th><th>Gast</th><th>Wettbewerb</th><th>Spielort</th><th></th><th></th>'
-            f'</tr></thead><tbody>{"".join(rows_html)}</tbody></table>'
+            f'</tr></thead><tbody>{"".join(rows_html)}</tbody></table></div>'
             f'</section>'
         )
 
@@ -179,6 +179,7 @@ def build_html(days, club_teams, sources, out_path):
 <html lang="de">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Spielplan – Übersicht</title>
 <style>
   body {{ font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f4f5f7; color:#222; margin:0; padding:24px; }}
@@ -217,7 +218,38 @@ def build_html(days, club_teams, sources, out_path):
   .link:hover {{ text-decoration:underline; }}
   .export-btn {{ background:#0d6efd; color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }}
   .export-btn:hover {{ background:#0b5ed7; }}
+  .table-wrap {{ overflow-x:auto; }}
   .foot {{ color:#999; font-size:12px; margin-top:8px; }}
+  @media (max-width: 640px) {{
+    body {{ padding:10px; }}
+    h1 {{ font-size:18px; }}
+    .sub {{ font-size:13px; margin-bottom:12px; }}
+    .filter {{ gap:8px; }}
+    .filter > label {{ font-size:13px; }}
+    .filter .chk {{ padding:6px 10px; font-size:13px; min-height:38px; }}
+    .export-btn {{ width:100%; padding:10px 14px; }}
+    .legend {{ gap:10px; font-size:12px; margin-bottom:14px; }}
+    .day {{ margin-bottom:14px; }}
+    .day-header {{ padding:8px 12px; }}
+    .table-wrap {{ overflow-x:visible; }}
+    thead {{ display:none; }}
+    tbody, tr {{ display:block; }}
+    table {{ table-layout:auto; }}
+    tbody tr {{ padding:10px 12px; border-bottom:1px solid #f0f0f0; }}
+    tr.hot {{ background:#fffaf0; }}
+    tr.hot td {{ background:transparent; }}
+    td {{ display:grid; grid-template-columns:92px 1fr; gap:4px 8px; padding:5px 0; border-bottom:none; font-size:13px; }}
+    td::before {{ content:attr(data-label); color:#888; font-size:10px; text-transform:uppercase; font-weight:600; letter-spacing:.03em; align-self:center; }}
+    td[data-label=""]::before {{ content:none; }}
+    td .cell {{ grid-column:2; grid-row:1; min-width:0; }}
+    td.vs {{ display:none; }}
+    td.team .cell {{ font-size:14px; }}
+    td.place .cell {{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; }}
+    td.home .cell {{ justify-self:end; }}
+    td:last-child .cell {{ justify-self:end; }}
+    .addr {{ word-break:break-word; }}
+    .foot {{ font-size:11px; }}
+  }}
 </style>
 </head>
 <body>
