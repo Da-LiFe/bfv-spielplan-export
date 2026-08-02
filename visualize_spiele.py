@@ -134,15 +134,15 @@ def build_html(days, club_teams, sources, out_path):
         rows_html = []
         for g in games:
             home_tag = '<span class="tag home" title="Heimspiel">H</span>' if g["is_home"] else '<span class="tag away" title="Auswärtsspiel">A</span>'
-            link_html = f'<a class="link" href="{esc(g["link"])}" target="_blank">Spiel ↗</a>' if g["link"] else ""
+            link_html = f'<a class="link" href="{esc(g["link"])}" target="_blank">Link zum Spiel ↗</a>' if g["link"] else ""
             place = g["spielort"].strip()
             map_html = f'<a class="map" href="{maps_url(place)}" target="_blank">Karte ↗</a>' if place else ""
             rows_html.append(
                 f'<tr class="{"hot" if is_hot else ""}" data-heim="{esc(g["heim"])}" data-gast="{esc(g["gast"])}">'
                 f'<td class="time" data-label="Zeit"><span class="cell">{esc(g["time"] or "–")}</span></td>'
-                f'<td class="team" data-label="Heim"><span class="cell" style="color:{g["home_color"]}">{esc(g["heim"])}</span></td>'
+                f'<td class="team" data-label="Heim" style="--c:{g["home_color"]}"><span class="cell">{esc(g["heim"])}</span></td>'
                 f'<td class="vs" data-label=""><span class="cell">vs</span></td>'
-                f'<td class="team" data-label="Gast"><span class="cell" style="color:{g["away_color"]}">{esc(g["gast"])}</span></td>'
+                f'<td class="team" data-label="Gast" style="--c:{g["away_color"]}"><span class="cell">{esc(g["gast"])}</span></td>'
                 f'<td class="comp" data-label="Wettbewerb"><span class="cell">{esc(g["wettbewerb"])}</span></td>'
                 f'<td class="place" data-label="Spielort"><span class="cell"><span class="addr">{esc(place)}</span>{map_html}</span></td>'
                 f'<td class="home" data-label=""><span class="cell">{home_tag}</span></td>'
@@ -211,6 +211,7 @@ def build_html(days, club_teams, sources, out_path):
   .map {{ color:#0d6efd; text-decoration:none; font-size:12px; white-space:nowrap; }}
   .map:hover {{ text-decoration:underline; }}
   .home {{ text-align:center; }}
+  .team .cell {{ color:var(--c, #222); font-weight:600; }}
   .tag {{ display:inline-block; width:18px; height:18px; line-height:18px; border-radius:50%; font-size:11px; color:#fff; text-align:center; }}
   .tag.home {{ background:#198754; }}
   .tag.away {{ background:#6c757d; }}
@@ -233,20 +234,31 @@ def build_html(days, club_teams, sources, out_path):
     .day-header {{ padding:8px 12px; }}
     .table-wrap {{ overflow-x:visible; }}
     thead {{ display:none; }}
-    tbody, tr {{ display:block; }}
-    table {{ table-layout:auto; }}
-    tbody tr {{ padding:10px 12px; border-bottom:1px solid #f0f0f0; }}
+    colgroup {{ display:none; }}
+    table {{ display:block; width:100%; }}
+    tbody {{ display:block; width:100%; }}
+    tbody tr {{ display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:10px 12px; border-bottom:1px solid #f0f0f0; }}
     tr.hot {{ background:#fffaf0; }}
     tr.hot td {{ background:transparent; }}
-    td {{ display:grid; grid-template-columns:92px 1fr; gap:4px 8px; padding:5px 0; border-bottom:none; font-size:13px; }}
-    td::before {{ content:attr(data-label); color:#888; font-size:10px; text-transform:uppercase; font-weight:600; letter-spacing:.03em; align-self:center; }}
+    td {{ display:flex; flex-direction:column; gap:1px; padding:4px 0; border-bottom:none; font-size:14px; color:#111; min-width:0; }}
+    td::before {{ content:attr(data-label); color:#666; font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:.05em; }}
     td[data-label=""]::before {{ content:none; }}
-    td .cell {{ grid-column:2; grid-row:1; min-width:0; }}
+    td .cell {{ width:100%; min-width:0; }}
     td.vs {{ display:none; }}
-    td.team .cell {{ font-size:14px; }}
-    td.place .cell {{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; }}
-    td.home .cell {{ justify-self:end; }}
-    td:last-child .cell {{ justify-self:end; }}
+    td:nth-child(1) {{ grid-column:1; grid-row:1; }}
+    td:nth-child(7) {{ grid-column:2; grid-row:1; align-items:flex-end; }}
+    td:nth-child(2) {{ grid-column:1 / 3; grid-row:2; }}
+    td:nth-child(4) {{ grid-column:1 / 3; grid-row:3; }}
+    td:nth-child(5) {{ grid-column:1 / 3; grid-row:4; }}
+    td:nth-child(6) {{ grid-column:1 / 3; grid-row:5; }}
+    td:nth-child(8) {{ grid-column:1 / 3; grid-row:6; }}
+    td.team .cell {{ font-size:15px; font-weight:700; color:#111; }}
+    td.team .cell::before {{ content:""; display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--c); margin-right:7px; vertical-align:1px; }}
+    td.comp .cell, td.place .cell {{ font-size:13px; }}
+    td.comp .cell {{ color:#333; }}
+    td.place .cell {{ color:#444; }}
+    td .cell .link {{ font-size:14px; }}
+    td:has(.cell:empty) {{ display:none; }}
     .addr {{ word-break:break-word; }}
     .foot {{ font-size:11px; }}
   }}

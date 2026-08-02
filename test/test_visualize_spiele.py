@@ -225,7 +225,7 @@ def test_build_html(tmp_path):
     assert 'data-label="Spiel"' in html
     assert '<span class="cell"' in html
     assert "@media (max-width: 640px)" in html
-    assert "grid-template-columns:92px 1fr" in html
+    assert "grid-template-columns:1fr auto" in html
     assert "thead" in html
 
 
