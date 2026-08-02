@@ -185,6 +185,104 @@ def test_group_by_day_empty():
     assert vis.group_by_day([]) == {}
 
 
+# ------------------------------------------------------- render_game_row()
+
+
+def test_render_game_row_home():
+    g = make_game("20.09.2026", "10:00", U15, "FC Gegner", is_home=True)
+    row = vis.render_game_row(g, is_hot=False)
+    assert 'class="tag home"' in row
+    assert 'title="Heimspiel"' in row
+    assert 'data-heim="TSV Gilching/Argelsried U15"' in row
+    assert 'data-gast="FC Gegner"' in row
+    assert "vs</span></td>" in row
+
+
+def test_render_game_row_away():
+    g = make_game("20.09.2026", "10:00", "FC Gegner", U15, is_home=False)
+    row = vis.render_game_row(g, is_hot=False)
+    assert 'class="tag away"' in row
+    assert 'title="Auswärtsspiel"' in row
+
+
+def test_render_game_row_no_link_no_place():
+    g = make_game("20.09.2026", "10:00", U15, "FC Gegner", link="", spielort="")
+    row = vis.render_game_row(g, is_hot=False)
+    assert "Karte ↗" not in row
+    assert "Link zum Spiel" not in row
+    assert 'class="addr">' in row
+
+
+# ------------------------------------------------------ render_day_section()
+
+
+def test_render_day_section_hot():
+    games = [
+        make_game("20.09.2026", "10:00", U15, "FC Gegner 1"),
+        make_game("20.09.2026", "14:00", U15, "FC Gegner 2"),
+    ]
+    section = vis.render_day_section("20.09.2026", games)
+    assert 'class="day-header hot"' in section
+    assert 'class="badge"' in section
+    assert 'style="display:none"' not in section
+    assert "⚠ 2 Spiele" in section
+
+
+def test_render_day_section_normal():
+    games = [make_game("20.09.2026", "10:00", U15, "FC Gegner")]
+    section = vis.render_day_section("20.09.2026", games)
+    assert 'class="day-header"' in section
+    assert 'class="day-header hot"' not in section
+    assert 'style="display:none"' in section
+
+
+# ------------------------------------------------------ render_team_checks()
+
+
+def test_render_team_checks():
+    html = vis.render_team_checks([U15, U17])
+    assert 'value="TSV Gilching/Argelsried U15"' in html
+    assert 'value="TSV Gilching/Argelsried U17"' in html
+    assert 'data-team="TSV Gilching/Argelsried U15"' in html
+    assert html.count('<input type="checkbox"') == 2
+
+
+# --------------------------------------------------------- render_footer()
+
+
+def test_render_footer():
+    sources = [
+        {"file": "a.csv", "team": U15, "url": "https://bfv/x"},
+        {"file": "b.csv", "team": U17, "url": ""},
+    ]
+    footer = vis.render_footer(sources)
+    assert '<a href="https://bfv/x"' in footer
+    assert f'>{U15}</a>' in footer
+    assert vis.esc(U17) in footer
+    assert "Datenquelle:" in footer
+
+
+# -------------------------------------------------------- render_games_js()
+
+
+def test_render_games_js():
+    days = {
+        "20.09.2026": [make_game("20.09.2026", "10:00", U15, "FC Gegner")],
+    }
+    js = vis.render_games_js(days)
+    import json
+
+    data = json.loads(js)
+    assert len(data) == 1
+    assert data[0]["d"] == "20.09.2026"
+    assert data[0]["h"] == U15
+    assert data[0]["a"] == "FC Gegner"
+    assert "t" in data[0]
+    assert "w" in data[0]
+    assert "p" in data[0]
+    assert "l" in data[0]
+
+
 # -------------------------------------------------------------- build_html()
 
 
