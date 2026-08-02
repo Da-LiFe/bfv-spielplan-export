@@ -305,7 +305,7 @@ def build_html(
   .team .cell {{ color:var(--c, #222); font-weight:600; }}
   .tag {{ display:inline-block; width:18px; height:18px; line-height:18px; border-radius:50%; font-size:11px; color:#fff; text-align:center; }}
   .tag.home {{ background:#198754; }}
-  .tag.away {{ background:#6c757d; }}
+  .tag.away {{ background:#6c75cd; }}
   .link {{ color:#0d6efd; text-decoration:none; font-size:13px; }}
   .link:hover {{ text-decoration:underline; }}
   .export-btn {{ background:#0d6efd; color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }}
