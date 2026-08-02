@@ -110,7 +110,8 @@ def fetch_all_matches(team_id: str) -> list[Entry]:
     return all_rows
 
 
-def fetch_one(url):
+def fetch_one(url: str) -> tuple[Path, int]:
+    """Fetch a single team's schedule and write it to a CSV file."""
     parts = [p for p in url.rstrip("/").split("/") if p]
     if not parts:
         raise ValueError(f"could not parse team ID from URL: {url}")
@@ -124,16 +125,20 @@ def fetch_one(url):
     for r in rows:
         r["Quelle"] = quelle
     with open(out_path, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=["Wettbewerb", "Datum", "Uhrzeit", "Heim", "Gast", "Spielort", "Link", "Quelle"])
+        w = csv.DictWriter(
+            f,
+            fieldnames=["Wettbewerb", "Datum", "Uhrzeit", "Heim", "Gast", "Spielort", "Link", "Quelle"],
+        )
         w.writeheader()
         w.writerows(rows)
     return out_path, len(rows)
 
 
-def refresh(teams_path):
+def load_teams(teams_path: Path) -> list[str]:
+    """Load non-empty, non-comment lines from a teams file."""
     if not teams_path.exists():
         sys.exit(f"Error: {teams_path} not found.")
-    urls = []
+    urls: list[str] = []
     for line in teams_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):

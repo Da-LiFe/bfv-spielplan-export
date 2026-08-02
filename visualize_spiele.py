@@ -95,7 +95,7 @@ def load_games() -> tuple[list[Game], list[str], list[Source]]:
         except Exception as exc:
             print(f"Warnung: {path.name} nicht lesbar ({exc})", file=sys.stderr)
             continue
-        file_games = []
+        file_games: list[Game] = []
         for r in rows:
             d = parse_datum(r.get("Datum", ""))
             if d is None:
@@ -103,119 +103,168 @@ def load_games() -> tuple[list[Game], list[str], list[Source]]:
             heim = (r.get("Heim") or "").strip()
             gast = (r.get("Gast") or "").strip()
             home_l = heim.lower()
-            file_games.append({
-                "date": d,
-                "datum": d.strftime("%d.%m.%Y"),
-                "wd": WD[d.weekday()],
-                "time": (r.get("Uhrzeit") or "").strip(),
-                "heim": heim,
-                "gast": gast,
-                "wettbewerb": (r.get("Wettbewerb") or "").strip(),
-                "spielort": (r.get("Spielort") or "").strip(),
-                "link": (r.get("Link") or "").strip(),
-                "quelle": (r.get("Quelle") or "").strip(),
-                "source": path.name,
-                "is_home": any(m in home_l for m in CLUB_MARKERS),
-                "home_color": team_color(heim),
-                "away_color": team_color(gast),
-            })
+            file_games.append(
+                Game(
+                    date=d,
+                    datum=d.strftime("%d.%m.%Y"),
+                    wd=WD[d.weekday()],
+                    time=(r.get("Uhrzeit") or "").strip(),
+                    heim=heim,
+                    gast=gast,
+                    wettbewerb=(r.get("Wettbewerb") or "").strip(),
+                    spielort=(r.get("Spielort") or "").strip(),
+                    link=(r.get("Link") or "").strip(),
+                    quelle=(r.get("Quelle") or "").strip(),
+                    source=path.name,
+                    is_home=any(m in home_l for m in CLUB_MARKERS),
+                    home_color=team_color(heim),
+                    away_color=team_color(gast),
+                )
+            )
         games.extend(file_games)
         if file_games:
-            counts = Counter()
-            for g in file_games:
-                counts[g["heim"]] += 1
-                counts[g["gast"]] += 1
-            team = max(counts, key=lambda t: counts[t])
-            full = next((t for t, c in counts.items() if c == len(file_games)), team)
-            club_teams.append(full)
-            sources.append({"file": path.name, "team": full, "url": file_games[0].get("quelle") or ""})
+            team, source = infer_team(file_games, path.name, file_games[0].get("quelle", ""))
+            club_teams.append(team)
+            sources.append(source)
     return games, club_teams, sources
 
 
-def group_by_day(games):
+def group_by_day(games: list[Game]) -> OrderedDict[str, list[Game]]:
+    """Group games by date, sorted by date then time."""
     games.sort(key=lambda g: (g["date"], g["time"] or "99:99"))
-    days = OrderedDict()
+    days: OrderedDict[str, list[Game]] = OrderedDict()
     for g in games:
         days.setdefault(g["datum"], []).append(g)
     return days
 
 
-def short_place(spielort, limit=45):
+def short_place(spielort: str, limit: int = 45) -> str:
+    """Shorten a location string, replacing pipes with commas."""
     s = re.sub(r"\s*\|\s*", ", ", spielort)
-    return s if len(s) <= limit else s[: limit - 1] + "…"
+    return s if len(s) <= limit else s[: limit - 1] + "\u2026"
 
 
-def maps_url(spielort):
+def maps_url(spielort: str) -> str:
+    """Build a Google Maps search URL for a location."""
     q = re.sub(r"\s*\|\s*", ", ", spielort).strip()
     if not q:
         return ""
     return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(q)
 
 
-def esc(t):
+def esc(t: str) -> str:
+    """HTML-escape a string."""
     return htmllib.escape(t, quote=True)
 
 
-def german_now():
+def german_now() -> str:
+    """Return the current date/time in German format."""
     now = datetime.now()
     return f"{WEEKDAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}, {now:%H:%M} Uhr"
 
 
-def build_html(days, club_teams, sources, out_path):
-    total = sum(len(v) for v in days.values())
-    hot_days = {d: len(v) for d, v in days.items() if len(v) >= 2}
+def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
+    """Serialize games to JSON for embedding in the HTML."""
+    return json.dumps(
+        [
+            {"d": g["datum"], "t": g["time"], "h": g["heim"], "a": g["gast"], "w": g["wettbewerb"], "p": g["spielort"], "l": g["link"]}
+            for day in days.values()
+            for g in day
+        ],
+        ensure_ascii=False,
+    )
 
-    team_checks = [f'<label class="chk"><input type="checkbox" value="{esc(t)}" data-team="{esc(t)}"> {esc(t)}</label>' for t in club_teams]
 
-    sections = []
-    for datum, games in days.items():
-        is_hot = len(games) >= 2
-        badge_style = "" if is_hot else ' style="display:none"'
-        badge = f'<span class="badge"{badge_style}>⚠ {len(games)} Spiele</span>'
-        header_cls = "day-header hot" if is_hot else "day-header"
-        rows_html = []
-        for g in games:
-            home_tag = '<span class="tag home" title="Heimspiel">H</span>' if g["is_home"] else '<span class="tag away" title="Auswärtsspiel">A</span>'
-            link_html = f'<a class="link" href="{esc(g["link"])}" target="_blank">Link zum Spiel ↗</a>' if g["link"] else ""
-            place = g["spielort"].strip()
-            map_html = f'<a class="map" href="{maps_url(place)}" target="_blank">Karte ↗</a>' if place else ""
-            rows_html.append(
-                f'<tr class="{"hot" if is_hot else ""}" data-heim="{esc(g["heim"])}" data-gast="{esc(g["gast"])}">'
-                f'<td class="time" data-label="Zeit"><span class="cell">{esc(g["time"] or "–")}</span></td>'
-                f'<td class="team" data-label="Heim" style="--c:{g["home_color"]}"><span class="cell">{esc(g["heim"])}</span></td>'
-                f'<td class="vs" data-label=""><span class="cell">vs</span></td>'
-                f'<td class="team" data-label="Gast" style="--c:{g["away_color"]}"><span class="cell">{esc(g["gast"])}</span></td>'
-                f'<td class="comp" data-label="Wettbewerb"><span class="cell">{esc(g["wettbewerb"])}</span></td>'
-                f'<td class="place" data-label="Spielort"><span class="cell"><span class="addr">{esc(place)}</span>{map_html}</span></td>'
-                f'<td class="home" data-label=""><span class="cell">{home_tag}</span></td>'
-                f'<td data-label="Spiel"><span class="cell">{link_html}</span></td>'
-                f'</tr>'
-            )
-        sections.append(
-            f'<section class="day" data-datum="{esc(datum)}">'
-            f'<div class="{header_cls}"><span class="when">{esc(games[0]["wd"])}, {esc(datum)}</span>{badge}</div>'
-            f'<div class="table-wrap"><table><colgroup>'
-            f'<col style="width:4%"><col style="width:23%"><col style="width:3%"><col style="width:23%">'
-            f'<col style="width:12%"><col style="width:24%"><col style="width:3%"><col style="width:8%">'
-            f'</colgroup><thead><tr>'
-            f'<th>Zeit</th><th>Heim</th><th></th><th>Gast</th><th>Wettbewerb</th><th>Spielort</th><th></th><th></th>'
-            f'</tr></thead><tbody>{"".join(rows_html)}</tbody></table></div>'
-            f'</section>'
-        )
+def render_game_row(g: Game, is_hot: bool) -> str:
+    """Render a single game table row."""
+    home_tag = (
+        '<span class="tag home" title="Heimspiel">H</span>'
+        if g["is_home"]
+        else '<span class="tag away" title="Auswärtsspiel">A</span>'
+    )
+    link_html = (
+        f'<a class="link" href="{esc(g["link"])}" target="_blank">Link zum Spiel ↗</a>'
+        if g["link"]
+        else ""
+    )
+    place = g["spielort"].strip()
+    map_html = (
+        f'<a class="map" href="{maps_url(place)}" target="_blank">Karte ↗</a>'
+        if place
+        else ""
+    )
+    return (
+        f'<tr class="{"hot" if is_hot else ""}" data-heim="{esc(g["heim"])}" data-gast="{esc(g["gast"])}">'
+        f'<td class="time" data-label="Zeit"><span class="cell">{esc(g["time"] or "–")}</span></td>'
+        f'<td class="team" data-label="Heim" style="--c:{g["home_color"]}"><span class="cell">{esc(g["heim"])}</span></td>'
+        f'<td class="vs" data-label=""><span class="cell">vs</span></td>'
+        f'<td class="team" data-label="Gast" style="--c:{g["away_color"]}"><span class="cell">{esc(g["gast"])}</span></td>'
+        f'<td class="comp" data-label="Wettbewerb"><span class="cell">{esc(g["wettbewerb"])}</span></td>'
+        f'<td class="place" data-label="Spielort"><span class="cell"><span class="addr">{esc(place)}</span>{map_html}</span></td>'
+        f'<td class="home" data-label=""><span class="cell">{home_tag}</span></td>'
+        f'<td data-label="Spiel"><span class="cell">{link_html}</span></td>'
+        f'</tr>'
+    )
 
-    games_js = json.dumps([
-        {"d": g["datum"], "t": g["time"], "h": g["heim"], "a": g["gast"],
-         "w": g["wettbewerb"], "p": g["spielort"], "l": g["link"]}
-        for day in days.values() for g in day
-    ], ensure_ascii=False)
 
-    src_links = []
+def render_day_section(datum: str, games: list[Game]) -> str:
+    """Render a full day section with header, table, and game rows."""
+    is_hot = len(games) >= 2
+    badge_style = "" if is_hot else ' style="display:none"'
+    badge = f'<span class="badge"{badge_style}>⚠ {len(games)} Spiele</span>'
+    header_cls = "day-header hot" if is_hot else "day-header"
+    rows_html = "".join(render_game_row(g, is_hot) for g in games)
+    return (
+        f'<section class="day" data-datum="{esc(datum)}">'
+        f'<div class="{header_cls}"><span class="when">{esc(games[0]["wd"])}, {esc(datum)}</span>{badge}</div>'
+        f'<div class="table-wrap"><table><colgroup>'
+        f'<col style="width:4%"><col style="width:23%"><col style="width:3%"><col style="width:23%">'
+        f'<col style="width:12%"><col style="width:24%"><col style="width:3%"><col style="width:8%">'
+        f'</colgroup><thead><tr>'
+        f'<th>Zeit</th><th>Heim</th><th></th><th>Gast</th><th>Wettbewerb</th><th>Spielort</th><th></th><th></th>'
+        f'</tr></thead><tbody>{rows_html}</tbody></table></div>'
+        f'</section>'
+    )
+
+
+def render_team_checks(club_teams: list[str]) -> str:
+    """Render team filter checkboxes."""
+    return "".join(
+        f'<label class="chk"><input type="checkbox" value="{esc(t)}" data-team="{esc(t)}"> {esc(t)}</label>'
+        for t in club_teams
+    )
+
+
+def render_footer(sources: list[Source]) -> str:
+    """Render the page footer with source links."""
+    src_links: list[str] = []
     for s in sources:
         if s["url"]:
             src_links.append(f'<a href="{esc(s["url"])}" target="_blank">{esc(s["team"])}</a>')
         else:
             src_links.append(esc(s["team"]))
-    footer = f"Erstellt am {esc(german_now())}. Datenquelle: {', '.join(src_links)}"
+    return f"Erstellt am {esc(german_now())}. Datenquelle: {', '.join(src_links)}"
+
+
+def build_html(
+    days: OrderedDict[str, list[Game]],
+    club_teams: list[str],
+    sources: list[Source],
+    out_path: Path,
+) -> None:
+    """Build the full HTML overview page."""
+    total = sum(len(v) for v in days.values())
+    hot_days = {d: len(v) for d, v in days.items() if len(v) >= 2}
+
+    team_checks_html = render_team_checks(club_teams)
+
+    sections: list[str] = []
+    for datum, games in days.items():
+        sections.append(render_day_section(datum, games))
+
+    games_js = render_games_js(days)
+
+    footer_html = render_footer(sources)
 
     html = f"""<!doctype html>
 <html lang="de">
@@ -312,7 +361,7 @@ def build_html(days, club_teams, sources, out_path):
 <div class="filter">
   <label>Teams:</label>
   <label class="chk"><input type="checkbox" id="allTeams" checked> Alle Teams</label>
-  {''.join(team_checks)}
+  {team_checks_html}
   <label class="chk past" title="Spiele an vergangenen Tagen ausblenden"><input type="checkbox" id="hidePast" checked> Vergangene Spiele ausblenden</label>
   <button type="button" id="icsExport" class="export-btn">Kalender-Export (.ics)</button>
 </div>
@@ -322,7 +371,7 @@ def build_html(days, club_teams, sources, out_path):
   <span>Hinterlegte Zeilen = mehrere Spiele am selben Tag</span>
 </div>
 {''.join(sections)}
-<div class="foot">{footer}</div>
+<div class="foot">{footer_html}</div>
 <script>
   const SPIELE = {games_js};
   const summaryAll = document.getElementById('summary').innerHTML;
@@ -486,73 +535,122 @@ def build_html(days, club_teams, sources, out_path):
     out_path.write_text(html, encoding="utf-8")
 
 
-def build_pdf(days, out_path):
+def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
+    """Build a multi-page PDF overview of all games."""
     styles = getSampleStyleSheet()
     title = ParagraphStyle("t", parent=styles["Title"], fontSize=18, spaceAfter=2)
-    subtitle = ParagraphStyle("st", parent=styles["Normal"], textColor=colors.grey, fontSize=10, spaceAfter=14)
-    day_head = ParagraphStyle("dh", parent=styles["Normal"], fontSize=11, textColor=colors.HexColor("#1a1a1a"), spaceAfter=0)
+    subtitle = ParagraphStyle(
+        "st", parent=styles["Normal"], textColor=colors.grey, fontSize=10, spaceAfter=14
+    )
+    day_head = ParagraphStyle(
+        "dh", parent=styles["Normal"], fontSize=11, textColor=colors.HexColor("#1a1a1a"), spaceAfter=0
+    )
     day_head_hot = ParagraphStyle("dhh", parent=day_head, textColor=colors.HexColor("#8a6d1a"))
     cell = ParagraphStyle("c", parent=styles["Normal"], fontSize=8, leading=10, spaceAfter=0)
     cell_white = ParagraphStyle("cw", parent=cell, textColor=colors.white, fontSize=9)
 
-    W = A4[0] - 2 * 14 * mm
-    col_w = [16 * mm, (W - 16 * mm - 14 * mm - 46 * mm - 40 * mm - 20 * mm), 46 * mm, 40 * mm, 20 * mm]
+    LEFT_MARGIN = 14 * mm
+    RIGHT_MARGIN = 14 * mm
+    HEADER_COL = 16 * mm
+    VS_COL = 46 * mm
+    COMP_COL = 40 * mm
+    HOME_COL = 20 * mm
+    CONTENT_WIDTH = A4[0] - LEFT_MARGIN - RIGHT_MARGIN
+    DYNAMIC_COL = CONTENT_WIDTH - HEADER_COL - VS_COL - COMP_COL - HOME_COL
+    col_w = [HEADER_COL, DYNAMIC_COL, VS_COL, COMP_COL, HOME_COL]
 
     total = sum(len(v) for v in days.values())
     hot = sum(1 for v in days.values() if len(v) >= 2)
 
-    story = [Paragraph("Spielplan – TSV Gilching/Argelsried", title),
-             Paragraph(f"{total} Spiele · {len(days)} Spieltage · {hot} Tage mit mehreren Spielen", subtitle)]
+    story = [
+        Paragraph("Spielplan – TSV Gilching/Argelsried", title),
+        Paragraph(
+            f"{total} Spiele · {len(days)} Spieltage · {hot} Tage mit mehreren Spielen", subtitle
+        ),
+    ]
 
     for datum, games in days.items():
         is_hot = len(games) >= 2
-        header_text = f"{games[0]['wd']}, {datum}" + (f" &nbsp;·&nbsp; {len(games)} Spiele" if is_hot else "")
+        header_text = (
+            f"{games[0]['wd']}, {datum}" + (f" &nbsp;·&nbsp; {len(games)} Spiele" if is_hot else "")
+        )
         story.append(Spacer(1, 6))
         story.append(Paragraph(header_text, day_head_hot if is_hot else day_head))
 
-        data = [[Paragraph("Zeit", cell), Paragraph("Begegnung", cell),
-                 Paragraph("Wettbewerb", cell), Paragraph("Spielort", cell), Paragraph("", cell)]]
+        data = [
+            [
+                Paragraph("Zeit", cell),
+                Paragraph("Begegnung", cell),
+                Paragraph("Wettbewerb", cell),
+                Paragraph("Spielort", cell),
+                Paragraph("", cell),
+            ]
+        ]
         for g in games:
             home_l, away_l = g["heim"], g["gast"]
             if not g["is_home"]:
                 home_l, away_l = away_l, home_l
-            match = f'<font color="{g["home_color"]}"><b>{esc(home_l)}</b></font> <font color="#999">–</font> <font color="{g["away_color"]}">{esc(away_l)}</font>'
-            link = f'<link href="{esc(g["link"])}"><font color="#0d6efd">Spiel ↗</font></link>' if g["link"] else ""
-            data.append([
-                Paragraph(esc(g["time"] or "–"), cell),
-                Paragraph(match, cell),
-                Paragraph(esc(g["wettbewerb"]), cell),
-                Paragraph(esc(short_place(g["spielort"], 45)), cell),
-                Paragraph(link, cell),
-            ])
+            match = (
+                f'<font color="{g["home_color"]}"><b>{esc(home_l)}</b></font> '
+                f'<font color="#999">–</font> '
+                f'<font color="{g["away_color"]}">{esc(away_l)}</font>'
+            )
+            link = (
+                f'<link href="{esc(g["link"])}"><font color="#0d6efd">Spiel ↗</font></link>'
+                if g["link"]
+                else ""
+            )
+            data.append(
+                [
+                    Paragraph(esc(g["time"] or "–"), cell),
+                    Paragraph(match, cell),
+                    Paragraph(esc(g["wettbewerb"]), cell),
+                    Paragraph(esc(short_place(g["spielort"], 45)), cell),
+                    Paragraph(link, cell),
+                ]
+            )
         t = Table(data, colWidths=col_w, repeatRows=1)
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2f7")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#666666")),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 8),
-            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e0e0e0")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ]))
+        t.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2f7")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#666666")),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 8),
+                    ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e0e0e0")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
         if is_hot:
-            t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#fff8e1")),
-                ("BOX", (0, 0), (-1, -1), 1.2, colors.HexColor("#f0ad4e")),
-            ]))
+            t.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#fff8e1")),
+                        ("BOX", (0, 0), (-1, -1), 1.2, colors.HexColor("#f0ad4e")),
+                    ]
+                )
+            )
         story.append(t)
 
-    SimpleDocTemplate(str(out_path), pagesize=A4,
-                      leftMargin=14 * mm, rightMargin=14 * mm,
-                      topMargin=14 * mm, bottomMargin=14 * mm,
-                      title="Spielplan – TSV Gilching/Argelsried").build(story)
+    SimpleDocTemplate(
+        str(out_path),
+        pagesize=A4,
+        leftMargin=LEFT_MARGIN,
+        rightMargin=RIGHT_MARGIN,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+        title="Spielplan – TSV Gilching/Argelsried",
+    ).build(story)
 
 
-def main():
+def main() -> None:
+    """Load games, generate HTML and PDF overviews."""
     games, club_teams, sources = load_games()
     if not games:
         sys.exit("Keine *_spiele_web.csv Dateien gefunden.")
