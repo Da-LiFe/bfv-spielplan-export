@@ -141,6 +141,11 @@ def refresh(teams_path):
         urls.append(line)
     if not urls:
         sys.exit(f"Error: no team URLs found in {teams_path}.")
+    return urls
+
+
+def fetch_all(urls: list[str]) -> int:
+    """Fetch every team's schedule, print progress, return total match count."""
     total = 0
     for url in urls:
         try:
@@ -151,19 +156,47 @@ def refresh(teams_path):
         total += n
         print(f"Wrote {n} matches to {out_path}", flush=True)
     print(f"Total: {total} matches", flush=True)
+    return total
+
+
+def regenerate_html(script_dir: Path) -> None:
+    """Run visualize_spiele.py if any CSV files exist."""
+    visualize = script_dir / "visualize_spiele.py"
+    if visualize.exists():
+        import subprocess
+
+        subprocess.run([sys.executable, str(visualize)], check=True)
+
+
+def refresh(teams_path: Path) -> None:
+    """Re-fetch all teams from a teams file and regenerate the overview."""
+    urls = load_teams(teams_path)
+    total = fetch_all(urls)
     if total:
-        visualize = SCRIPT_DIR / "visualize_spiele.py"
-        if visualize.exists():
-            import subprocess
-            subprocess.run([sys.executable, str(visualize)], check=True)
+        regenerate_html(SCRIPT_DIR)
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Fetch a BFV team's full match schedule and write a CSV.")
-    ap.add_argument("url", nargs="?", help="BFV team page URL, e.g. https://www.bfv.de/mannschaften/tsv-gilching-argelsried-2-7/02Q0KPORKS000000VS5489B2VTB2M2VN")
+def main() -> None:
+    """CLI entry point: fetch a single team or refresh all teams."""
+    ap = argparse.ArgumentParser(
+        description="Fetch a BFV team's full match schedule and write a CSV."
+    )
+    ap.add_argument(
+        "url",
+        nargs="?",
+        help="BFV team page URL, e.g. https://www.bfv.de/mannschaften/...",
+    )
     ap.add_argument("output", nargs="?", help="Output CSV path (default: <slug>_spiele_web.csv)")
-    ap.add_argument("--refresh", action="store_true", help="Re-fetch all teams listed in teams.txt and regenerate the overview")
-    ap.add_argument("--teams", default=None, help="Path to teams file (default: teams.txt next to this script)")
+    ap.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Re-fetch all teams listed in teams.txt and regenerate the overview",
+    )
+    ap.add_argument(
+        "--teams",
+        default=None,
+        help="Path to teams file (default: teams.txt next to this script)",
+    )
     args = ap.parse_args()
 
     if args.refresh:
