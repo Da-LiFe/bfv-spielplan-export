@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import csv
 import html as htmllib
@@ -5,51 +7,95 @@ import re
 import sys
 import urllib.request
 from pathlib import Path
+from typing import TypedDict
+
+from config import SCRIPT_DIR
 
 BASE = "https://www.bfv.de/partial/mannschaftsprofil/spielplan/{}/alle"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 SIZE = 100
 MAX_ITER = 10
-ENTRY_RE = re.compile(r'<div class="bfv-spieltag-eintrag">(.*?)(?=<div class="bfv-spieltag-matchups__separator|$)', re.S)
-SCRIPT_DIR = Path(__file__).resolve().parent
+ENTRY_RE = re.compile(
+    r'<div class="bfv-spieltag-eintrag">(.*?)(?=<div class="bfv-spieltag-matchups__separator|$)',
+    re.S,
+)
 
 
-def clean(x):
-    x = re.sub(r"<wbr>", "", x)
-    x = re.sub(r"<[^>]+>", " ", x)
+class Entry(TypedDict):
+    """A single parsed BFV match entry."""
+
+    Wettbewerb: str
+    Datum: str
+    Uhrzeit: str
+    Heim: str
+    Gast: str
+    Spielort: str
+    Link: str
+    Quelle: str
+
+
+def _remove_wbr(text: str) -> str:
+    """Remove &lt;wbr&gt; tags from text."""
+    return re.sub(r"<wbr>", "", text)
+
+
+def _strip_tags(text: str) -> str:
+    """Remove all HTML tags from text."""
+    return re.sub(r"<[^>]+>", " ", text)
+
+
+def _collapse_whitespace(text: str) -> str:
+    """Collapse runs of whitespace into a single space and strip."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def clean(x: str) -> str:
+    """Strip HTML tags, wbr, entities, and collapse whitespace."""
+    x = _remove_wbr(x)
+    x = _strip_tags(x)
     x = htmllib.unescape(x)
-    return re.sub(r"\s+", " ", x).strip()
+    return _collapse_whitespace(x)
 
 
-def fetch(url):
+def fetch(url: str) -> str:
+    """Fetch a URL and return its text content."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
 
-def parse_entries(html_text):
-    rows = []
+def parse_entries(html_text: str) -> list[Entry]:
+    """Parse match entries from BFV HTML markup."""
+    rows: list[Entry] = []
     for e in ENTRY_RE.findall(html_text):
         region = re.search(r'bfv-spieltag-eintrag__region">(.*?)</div>', e, re.S)
         link = re.search(r'bfv-spieltag-eintrag__match-link"\s+href="([^"]+)"', e)
-        dtime = re.search(r"bfv-matchday-date-time\">.*?<span>\s*([0-9]{2}\.[0-9]{2}\.[0-9]{4})\s*/([0-9:.]+)\s*Uhr\s*</span>", e, re.S)
+        dtime = re.search(
+            r"bfv-matchday-date-time\">.*?<span>\s*([0-9]{2}\.[0-9]{2}\.[0-9]{4})\s*/([0-9:.]+)\s*Uhr\s*</span>",
+            e,
+            re.S,
+        )
         t0 = re.search(r"bfv-matchdata-result__team-name--team0[^>]*>(.*?)</div>", e, re.S)
         t1 = re.search(r"bfv-matchdata-result__team-name--team1[^>]*>(.*?)</div>", e, re.S)
         loc = re.search(r'bfv-spieltag-eintrag__location">(.*?)</div>', e, re.S)
-        rows.append({
-            "Wettbewerb": clean(region.group(1)) if region else "",
-            "Datum": dtime.group(1) if dtime else "",
-            "Uhrzeit": dtime.group(2) if dtime else "",
-            "Heim": clean(t0.group(1)) if t0 else "",
-            "Gast": clean(t1.group(1)) if t1 else "",
-            "Spielort": clean(loc.group(1)) if loc else "",
-            "Link": link.group(1).strip() if link else "",
-        })
+        rows.append(
+            Entry(
+                Wettbewerb=clean(region.group(1)) if region else "",
+                Datum=dtime.group(1) if dtime else "",
+                Uhrzeit=dtime.group(2) if dtime else "",
+                Heim=clean(t0.group(1)) if t0 else "",
+                Gast=clean(t1.group(1)) if t1 else "",
+                Spielort=clean(loc.group(1)) if loc else "",
+                Link=link.group(1).strip() if link else "",
+                Quelle="",
+            )
+        )
     return rows
 
 
-def fetch_all_matches(team_id):
-    all_rows = []
+def fetch_all_matches(team_id: str) -> list[Entry]:
+    """Fetch all match entries for a team, handling pagination."""
+    all_rows: list[Entry] = []
     from_ = 0
     for _ in range(MAX_ITER):
         url = f"{BASE.format(team_id)}?from={from_}&size={SIZE}"

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import csv
 import html as htmllib
 import json
@@ -7,7 +9,17 @@ import urllib.parse
 from collections import Counter, OrderedDict, defaultdict
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
+from config import (
+    CLUB_MARKERS,
+    CSV_DATE_FORMAT,
+    PALETTE,
+    SCRIPT_DIR,
+    WEEKDAYS_DE,
+    WD,
+    MONTHS_DE,
+)
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -15,37 +27,67 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-CLUB_MARKERS = ["tsv gilching", "tsv gilching/argelsried", "tsv gilching-argelsried", "tsv gilching/a"]
-WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-MONTHS_DE = ["Januar", "Februar", "März", "April", "Mai", "Juni",
-             "Juli", "August", "September", "Oktober", "November", "Dezember"]
 
-PALETTE = [
-    "#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd",
-    "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
-    "#9edae5", "#c49c94", "#ff9896", "#ffbb78", "#aec7e8",
-]
+class Source(TypedDict):
+    """A source file entry with team name and BFV URL."""
+
+    file: str
+    team: str
+    url: str
 
 
-def parse_datum(s):
+class Game(TypedDict):
+    """A parsed game record."""
+
+    date: datetime
+    datum: str
+    wd: str
+    time: str
+    heim: str
+    gast: str
+    wettbewerb: str
+    spielort: str
+    link: str
+    quelle: str
+    source: str
+    is_home: bool
+    home_color: str
+    away_color: str
+
+
+def parse_datum(s: str) -> datetime | None:
+    """Parse a DD.MM.YYYY date string, or return None."""
     try:
-        return datetime.strptime(s.strip(), "%d.%m.%Y")
+        return datetime.strptime(s.strip(), CSV_DATE_FORMAT)
     except ValueError:
         return None
 
 
-def team_color(name):
+def team_color(name: str) -> str:
+    """Return a deterministic color for a team name."""
     if not name:
         return "#888888"
     return PALETTE[sum(ord(c) for c in name) % len(PALETTE)]
 
 
-def load_games():
-    games = []
-    club_teams = []
-    sources = []
+def infer_team(
+    file_games: list[Game], source_file: str, first_quelle: str
+) -> tuple[str, Source]:
+    """Infer the club team name from game appearances and return source info."""
+    counts = Counter()
+    for g in file_games:
+        counts[g["heim"]] += 1
+        counts[g["gast"]] += 1
+    team = max(counts, key=lambda t: counts[t])
+    full = next((t for t, c in counts.items() if c == len(file_games)), team)
+    return full, Source(file=source_file, team=full, url=first_quelle)
+
+
+def load_games() -> tuple[list[Game], list[str], list[Source]]:
+    """Load all games from *_spiele_web.csv files."""
+    games: list[Game] = []
+    club_teams: list[str] = []
+    sources: list[Source] = []
     for path in sorted(SCRIPT_DIR.glob("*_spiele_web.csv")):
         try:
             with open(path, encoding="utf-8-sig", newline="") as f:
