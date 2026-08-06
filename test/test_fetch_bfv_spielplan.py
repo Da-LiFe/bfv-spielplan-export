@@ -1,4 +1,5 @@
 import csv
+import json
 from pathlib import Path
 
 import pytest
@@ -221,13 +222,44 @@ def test_fetch_one_unparseable_url_rejected():
 
 # --------------------------------------------------------------- refresh()
 
+TEAMS_JSON = [
+    {"url": TEAM_URL},
+    {
+        "url": "https://www.bfv.de/mannschaften/tsv-slug/02R2MA58DK000000VS5489B2VS0BVSMI",
+        "alias": "TSV Gilching/Argelsried u11w",
+    },
+]
+
+
+def test_load_teams_json(tmp_path):
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text(json.dumps(TEAMS_JSON), encoding="utf-8")
+    assert fetch.load_teams(teams_file) == [
+        {"url": TEAM_URL, "alias": None},
+        {
+            "url": "https://www.bfv.de/mannschaften/tsv-slug/02R2MA58DK000000VS5489B2VS0BVSMI",
+            "alias": "TSV Gilching/Argelsried u11w",
+        },
+    ]
+
+
+def test_load_teams_missing_team_without_url(tmp_path):
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text(json.dumps([{"alias": "ohne url"}]), encoding="utf-8")
+    with pytest.raises(SystemExit, match="needs a 'url' field"):
+        fetch.load_teams(teams_file)
+
+
+def test_load_teams_invalid_json(tmp_path):
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text("{kein json", encoding="utf-8")
+    with pytest.raises(SystemExit, match="not valid JSON"):
+        fetch.load_teams(teams_file)
+
 
 def test_refresh_all_teams(tmp_path, monkeypatch, capsys):
-    teams_file = tmp_path / "teams.txt"
-    teams_file.write_text(
-        f"# Kommentar\n\n{TEAM_URL}\nhttps://www.bfv.de/mannschaften/tsv-slug/02R2MA58DK000000VS5489B2VS0BVSMI\n",
-        encoding="utf-8",
-    )
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text(json.dumps(TEAMS_JSON), encoding="utf-8")
     calls = []
 
     def fake_fetch_one(url):
@@ -247,8 +279,8 @@ def test_refresh_all_teams(tmp_path, monkeypatch, capsys):
 
 
 def test_refresh_continues_on_error(tmp_path, monkeypatch, capsys):
-    teams_file = tmp_path / "teams.txt"
-    teams_file.write_text(f"{TEAM_URL}\nhttps://www.bfv.de/mannschaften/tsv-slug/02R2MA58DK000000VS5489B2VS0BVSMI\n", encoding="utf-8")
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text(json.dumps(TEAMS_JSON), encoding="utf-8")
     monkeypatch.setattr(
         fetch,
         "fetch_one",
@@ -264,19 +296,19 @@ def test_refresh_continues_on_error(tmp_path, monkeypatch, capsys):
 
 def test_refresh_missing_teams_file(tmp_path):
     with pytest.raises(SystemExit, match="not found"):
-        fetch.refresh(tmp_path / "nope.txt")
+        fetch.refresh(tmp_path / "nope.json")
 
 
 def test_refresh_no_urls(tmp_path):
-    teams_file = tmp_path / "teams.txt"
-    teams_file.write_text("# nur Kommentar\n", encoding="utf-8")
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text("[]", encoding="utf-8")
     with pytest.raises(SystemExit, match="no team URLs"):
         fetch.refresh(teams_file)
 
 
 def test_refresh_skips_visualize_if_missing(tmp_path, monkeypatch, capsys):
-    teams_file = tmp_path / "teams.txt"
-    teams_file.write_text(TEAM_URL + "\n", encoding="utf-8")
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text(json.dumps([{"url": TEAM_URL}]), encoding="utf-8")
     monkeypatch.setattr(fetch, "fetch_one", lambda url: (Path("a.csv"), 1))
     monkeypatch.setattr(fetch, "SCRIPT_DIR", tmp_path)
     fetch.refresh(teams_file)

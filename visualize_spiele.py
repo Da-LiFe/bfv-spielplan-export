@@ -34,6 +34,7 @@ class Source(TypedDict):
     file: str
     team: str
     url: str
+    original: str
 
 
 class Game(TypedDict):
@@ -63,6 +64,22 @@ def parse_datum(s: str) -> datetime | None:
         return None
 
 
+def load_alias_map(teams_path: Path | None = None) -> dict[str, str]:
+    """Build a mapping of BFV team URL -> display alias from teams.json."""
+    path = teams_path or SCRIPT_DIR / "teams.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return {
+        str(entry["url"]): str(entry["alias"])
+        for entry in data
+        if isinstance(entry, dict) and entry.get("url") and entry.get("alias")
+    }
+
+
 def team_color(name: str) -> str:
     """Return a deterministic color for a team name."""
     if not name:
@@ -83,8 +100,16 @@ def infer_team(
     return full, Source(file=source_file, team=full, url=first_quelle)
 
 
-def load_games() -> tuple[list[Game], list[str], list[Source]]:
-    """Load all games from *_spiele_web.csv files."""
+def load_games(
+    alias_map: dict[str, str] | None = None,
+) -> tuple[list[Game], list[str], list[Source]]:
+    """Load all games from *_spiele_web.csv files.
+
+    When ``alias_map`` (URL -> display alias) contains the source URL of a
+    file, the club team's name is replaced by the alias in every game.
+    """
+    if alias_map is None:
+        alias_map = load_alias_map()
     games: list[Game] = []
     club_teams: list[str] = []
     sources: list[Source] = []
@@ -124,7 +149,18 @@ def load_games() -> tuple[list[Game], list[str], list[Source]]:
         games.extend(file_games)
         if file_games:
             team, source = infer_team(file_games, path.name, file_games[0].get("quelle", ""))
-            club_teams.append(team)
+            source["original"] = source["team"]
+            alias = alias_map.get(source["url"])
+            if alias:
+                for g in file_games:
+                    if g["heim"] == source["original"]:
+                        g["heim"] = alias
+                        g["home_color"] = team_color(alias)
+                    if g["gast"] == source["original"]:
+                        g["gast"] = alias
+                        g["away_color"] = team_color(alias)
+                source["team"] = alias
+            club_teams.append(source["team"])
             sources.append(source)
     return games, club_teams, sources
 
@@ -263,6 +299,10 @@ def build_html(
         sections.append(render_day_section(datum, games))
 
     games_js = render_games_js(days)
+    aliases_js = json.dumps(
+        [[s["team"], s.get("original", s["team"])] for s in sources],
+        ensure_ascii=False,
+    )
 
     footer_html = render_footer(sources)
 
@@ -374,6 +414,8 @@ def build_html(
 <div class="foot">{footer_html}</div>
 <script>
   const SPIELE = {games_js};
+  const TEAM_ALIASES = {aliases_js};
+  const aliasToOriginal = Object.fromEntries(TEAM_ALIASES);
   const summaryAll = document.getElementById('summary').innerHTML;
   const allCheck = document.getElementById('allTeams');
   const teamChecks = Array.from(document.querySelectorAll('input[data-team]'));
@@ -449,7 +491,8 @@ def build_html(
   const params = new URLSearchParams(window.location.search);
   const teamParams = params.getAll('team');
   if (teamParams.length) {{
-    const found = teamChecks.filter(c => teamParams.includes(c.value));
+    const found = teamChecks.filter(c =>
+      teamParams.includes(c.value) || teamParams.includes(aliasToOriginal[c.value]));
     if (found.length) {{
       teamChecks.forEach(c => c.checked = false);
       found.forEach(c => c.checked = true);

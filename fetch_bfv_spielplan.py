@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import html as htmllib
+import json
 import re
 import sys
 import urllib.request
@@ -134,25 +135,29 @@ def fetch_one(url: str) -> tuple[Path, int]:
     return out_path, len(rows)
 
 
-def load_teams(teams_path: Path) -> list[str]:
-    """Load non-empty, non-comment lines from a teams file."""
+def load_teams(teams_path: Path) -> list[dict]:
+    """Load team entries (url + optional alias) from a JSON file."""
     if not teams_path.exists():
         sys.exit(f"Error: {teams_path} not found.")
-    urls: list[str] = []
-    for line in teams_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        urls.append(line)
-    if not urls:
+    try:
+        data = json.loads(teams_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        sys.exit(f"Error: {teams_path} is not valid JSON: {exc}")
+    teams: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict) or not entry.get("url"):
+            sys.exit(f"Error: each entry in {teams_path} needs a 'url' field.")
+        teams.append({"url": entry["url"], "alias": entry.get("alias")})
+    if not teams:
         sys.exit(f"Error: no team URLs found in {teams_path}.")
-    return urls
+    return teams
 
 
-def fetch_all(urls: list[str]) -> int:
+def fetch_all(teams: list[dict]) -> int:
     """Fetch every team's schedule, print progress, return total match count."""
     total = 0
-    for url in urls:
+    for team in teams:
+        url = team["url"]
         try:
             out_path, n = fetch_one(url)
         except Exception as exc:
@@ -174,9 +179,9 @@ def regenerate_html(script_dir: Path) -> None:
 
 
 def refresh(teams_path: Path) -> None:
-    """Re-fetch all teams from a teams file and regenerate the overview."""
-    urls = load_teams(teams_path)
-    total = fetch_all(urls)
+    """Re-fetch all teams from a teams JSON file and regenerate the overview."""
+    teams = load_teams(teams_path)
+    total = fetch_all(teams)
     if total:
         regenerate_html(SCRIPT_DIR)
 
@@ -195,17 +200,17 @@ def main() -> None:
     ap.add_argument(
         "--refresh",
         action="store_true",
-        help="Re-fetch all teams listed in teams.txt and regenerate the overview",
+        help="Re-fetch all teams listed in teams.json and regenerate the overview",
     )
     ap.add_argument(
         "--teams",
         default=None,
-        help="Path to teams file (default: teams.txt next to this script)",
+        help="Path to teams JSON file (default: teams.json next to this script)",
     )
     args = ap.parse_args()
 
     if args.refresh:
-        refresh(Path(args.teams) if args.teams else SCRIPT_DIR / "teams.txt")
+        refresh(Path(args.teams) if args.teams else SCRIPT_DIR / "teams.json")
         return
     if not args.url:
         ap.error("URL or --refresh is required")
