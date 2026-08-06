@@ -1,4 +1,5 @@
 import csv
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -134,6 +135,28 @@ def test_german_now_format():
     assert re.match(r"^[A-Z][a-zäöü]+, \d{1,2}\. [A-Za-zäöü]+ \d{4}, \d{2}:\d{2} Uhr$", out)
 
 
+# ----------------------------------------------------------- load_alias_map()
+
+
+def test_load_alias_map(tmp_path):
+    teams_file = tmp_path / "teams.json"
+    teams_file.write_text(
+        json.dumps(
+            [
+                {"url": "https://bfv/1", "alias": "Alias 1"},
+                {"url": "https://bfv/2"},
+                {"url": "https://bfv/3", "alias": ""},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assert vis.load_alias_map(teams_file) == {"https://bfv/1": "Alias 1"}
+
+
+def test_load_alias_map_missing(tmp_path):
+    assert vis.load_alias_map(tmp_path / "nope.json") == {}
+
+
 # ------------------------------------------------------------- load_games()
 
 
@@ -164,6 +187,25 @@ def test_load_games_no_csvs(monkeypatch, tmp_path):
     assert games == []
     assert club_teams == []
     assert sources == []
+
+
+def test_load_games_with_aliases(monkeypatch, tmp_path):
+    write_fixtures(tmp_path)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    alias_map = {"https://bfv/quelle-a": "TSV Gilching/Argelsried u15w"}
+    games, club_teams, sources = vis.load_games(alias_map)
+    assert club_teams == ["TSV Gilching/Argelsried u15w", U17]
+    by_file = {s["file"]: s for s in sources}
+    assert by_file["tsv-a_spiele_web.csv"]["team"] == "TSV Gilching/Argelsried u15w"
+    assert by_file["tsv-a_spiele_web.csv"]["original"] == U15
+    assert by_file["tsv-b_spiele_web.csv"]["team"] == U17
+
+    home = [g for g in games if g["heim"] == "TSV Gilching/Argelsried u15w"]
+    assert len(home) == 2
+    assert all(g["is_home"] for g in home)
+    away = next(g for g in games if g["gast"] == "TSV Gilching/Argelsried u15w")
+    assert away["is_home"] is False
+    assert all(U15 not in g.values() for g in home)
 
 
 # ------------------------------------------------------------ group_by_day()
@@ -247,6 +289,12 @@ def test_render_team_checks():
     assert html.count('<input type="checkbox"') == 2
 
 
+def test_render_team_checks_with_aliases():
+    html = vis.render_team_checks(["TSV Gilching/Argelsried u15w", "TSV Gilching/Argelsried u17w"])
+    assert 'value="TSV Gilching/Argelsried u15w"' in html
+    assert 'value="TSV Gilching/Argelsried u17w"' in html
+
+
 # --------------------------------------------------------- render_footer()
 
 
@@ -325,6 +373,25 @@ def test_build_html(tmp_path):
     assert "@media (max-width: 640px)" in html
     assert "grid-template-columns:1fr auto" in html
     assert "thead" in html
+
+
+def test_build_html_embeds_alias_map(tmp_path):
+    out = tmp_path / "spielplan.html"
+    days = {"20.09.2026": [make_game("20.09.2026", "10:00", "TSV Gilching/Argelsried 2 (7)", "FC Gegner")]}
+    clubs = ["TSV Gilching/Argelsried u15w2"]
+    sources = [
+        {
+            "file": "x.csv",
+            "team": "TSV Gilching/Argelsried u15w2",
+            "url": "https://bfv/x",
+            "original": "TSV Gilching/Argelsried 2 (7)",
+        }
+    ]
+    vis.build_html(days, clubs, sources, out)
+    html = out.read_text(encoding="utf-8")
+    assert 'const TEAM_ALIASES = [["TSV Gilching/Argelsried u15w2", "TSV Gilching/Argelsried 2 (7)"]]' in html
+    assert 'value="TSV Gilching/Argelsried u15w2"' in html
+    assert 'aliasToOriginal' in html
 
 
 # --------------------------------------------------------------- build_pdf()

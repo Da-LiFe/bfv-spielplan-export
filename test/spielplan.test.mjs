@@ -7,6 +7,7 @@ import vm from 'node:vm';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VISUALIZE = path.join(REPO_ROOT, 'visualize_spiele.py');
+const CONFIG = path.join(REPO_ROOT, 'config.py');
 
 let failures = 0;
 function check(cond, label) {
@@ -73,6 +74,7 @@ let js = '';
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spielplan-test-'));
   try {
     fs.copyFileSync(VISUALIZE, path.join(tmp, 'visualize_spiele.py'));
+    fs.copyFileSync(CONFIG, path.join(tmp, 'config.py'));
     fs.writeFileSync(path.join(tmp, 'tsv-a_spiele_web.csv'), csvFor(fileA), 'utf8');
     fs.writeFileSync(path.join(tmp, 'tsv-b_spiele_web.csv'), csvFor(fileB), 'utf8');
     execFileSync('python3', ['visualize_spiele.py'], { cwd: tmp, stdio: 'pipe' });
