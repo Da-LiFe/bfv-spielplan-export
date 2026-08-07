@@ -13,6 +13,7 @@ from typing import TypedDict
 
 from config import (
     CLUB_MARKERS,
+    CLUB_NAME,
     CSV_DATE_FORMAT,
     PALETTE,
     SCRIPT_DIR,
@@ -38,7 +39,7 @@ if _FONT_BOLD_PATH.exists():
     pdfmetrics.registerFont(TTFont("NotoSans-Bold", str(_FONT_BOLD_PATH)))
 
 
-class Source(TypedDict):
+class Source(TypedDict, total=False):
     """A source file entry with team name and BFV URL."""
 
     file: str
@@ -101,7 +102,7 @@ def infer_team(
     file_games: list[Game], source_file: str, first_quelle: str
 ) -> tuple[str, Source]:
     """Infer the club team name from game appearances and return source info."""
-    counts = Counter()
+    counts: Counter[str] = Counter()
     for g in file_games:
         counts[g["heim"]] += 1
         counts[g["gast"]] += 1
@@ -332,7 +333,7 @@ def build_html(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Spielplan – Übersicht</title>
+<title>Spielplan – {esc(CLUB_NAME)}</title>
 <style>
   body {{ font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:#f4f5f7; color:#222; margin:0; padding:24px; }}
   h1 {{ font-size: 22px; margin: 0 0 4px; }}
@@ -418,7 +419,7 @@ def build_html(
 </style>
 </head>
 <body>
-<h1>Spielplan – TSV Gilching/Argelsried</h1>
+<h1>Spielplan – {esc(CLUB_NAME)}</h1>
 <div class="sub" id="summary">{total} Spiele · {len(days)} Spieltage · <span style="color:#b8860b;font-weight:600">{len(hot_days)} Tage mit mehreren Spielen</span></div>
 <div class="filter">
   <label>Teams:</label>
@@ -437,6 +438,7 @@ def build_html(
 <script>
   const SPIELE = {games_js};
   const TEAM_ALIASES = {aliases_js};
+  const CLUB_NAME_JS = "{esc(CLUB_NAME)}";
   const aliasToOriginal = Object.fromEntries(TEAM_ALIASES);
   const summaryAll = document.getElementById('summary').innerHTML;
   const allCheck = document.getElementById('allTeams');
@@ -565,11 +567,11 @@ def build_html(
       games = games.filter(g => dayKey(g.d) >= todayKey);
     }}
     if (!games.length) {{ alert('Keine Spiele für die Auswahl.'); return; }}
-    const calName = sel === null ? 'Spielplan TSV Gilching/Argelsried' : sel.join(', ');
+    const calName = sel === null ? `Spielplan ${{CLUB_NAME_JS}}` : sel.join(', ');
     const lines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//Spielplan//TSV Gilching Argelsried//DE',
+      'PRODID:-//Spielplan//{esc(CLUB_NAME)}//DE',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'X-WR-CALNAME:' + calName,
@@ -648,7 +650,7 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     hot = sum(1 for v in days.values() if len(v) >= 2)
 
     story = [
-        Paragraph("Spielplan – TSV Gilching/Argelsried", title),
+        Paragraph(f"Spielplan – {CLUB_NAME}", title),
         Paragraph(
             f"{total} Spiele · {len(days)} Spieltage · {hot} Tage mit mehreren Spielen", subtitle
         ),
@@ -730,7 +732,7 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
         rightMargin=RIGHT_MARGIN,
         topMargin=14 * mm,
         bottomMargin=14 * mm,
-        title="Spielplan – TSV Gilching/Argelsried",
+        title=f"Spielplan – {CLUB_NAME}",
     ).build(story)
 
 

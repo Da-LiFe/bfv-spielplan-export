@@ -20,6 +20,8 @@ PALETTE: list[str] = [
 ]
 CSV_DATE_FORMAT: str = "%d.%m.%Y"
 
+CLUB_NAME: str = "TSV Gilching/Argelsried"
+
 CLUB_MARKERS: set[str] = {
     "tsv gilching",
     "tsv gilching/argelsried",

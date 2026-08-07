@@ -194,7 +194,7 @@ class _BFVParser(HTMLParser):
         if self._active_field == "_datetime":
             self._datetime_raw += data
         else:
-            self._current[self._active_field] += data
+            self._current[self._active_field] += data  # type: ignore[literal-required]
 
     def close(self) -> None:
         super().close()
@@ -221,7 +221,10 @@ def fetch_all_matches(team_id: str) -> list[Entry]:
     """Fetch all match entries for a team, handling pagination."""
     all_rows: list[Entry] = []
     from_ = 0
-    for _ in range(MAX_ITER):
+    rate_limit = float(os.environ.get("BFV_RATE_LIMIT", "0.0"))
+    for i in range(MAX_ITER):
+        if i > 0 and rate_limit > 0:
+            time.sleep(rate_limit)
         url = f"{BASE.format(team_id)}?from={from_}&size={SIZE}"
         html_text = fetch(url)
         rows = parse_entries(html_text)

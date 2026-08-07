@@ -134,6 +134,30 @@ def test_fetch_all_matches_paginates(monkeypatch):
     assert calls[1] == fetch.BASE.format(TEAM_ID) + "?from=100&size=100"
 
 
+def test_fetch_all_matches_rate_limit(monkeypatch, capsys):
+    calls = []
+    sleeps = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        if "from=0" in url:
+            return entry(link="https://x/1") + SEPARATOR + entry(link="https://x/2") + SHOWMORE
+        return entry(link="https://x/3")
+
+    def fake_sleep(duration):
+        sleeps.append(duration)
+
+    class FakeTime:
+        sleep = staticmethod(fake_sleep)
+
+    monkeypatch.setattr(fetch, "fetch", fake_fetch)
+    monkeypatch.setattr(fetch, "time", FakeTime())
+    monkeypatch.setenv("BFV_RATE_LIMIT", "0.5")
+    fetch.fetch_all_matches(TEAM_ID)
+    assert len(sleeps) == 1
+    assert sleeps[0] == 0.5
+
+
 def test_fetch_all_matches_stops_on_empty_page(monkeypatch):
     calls = []
 
