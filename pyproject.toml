@@ -1,0 +1,25 @@
+[project]
+name = "spielplan"
+version = "0.1.0"
+description = "Fetch BFV match schedules and generate HTML/PDF overviews"
+requires-python = ">=3.12"
+dependencies = [
+    "reportlab",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["."]
+omit = ["test/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+fail_under = 0
