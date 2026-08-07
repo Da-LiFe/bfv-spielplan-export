@@ -2,24 +2,28 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import html as htmllib
 import json
+import os
 import re
 import sys
+import time
+import urllib.error
 import urllib.request
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import TypedDict
 
 from config import SCRIPT_DIR
 
+CACHE_DIR = SCRIPT_DIR / ".bfv_cache"
+CACHE_TTL = 3600  # 1 hour
+
 BASE = "https://www.bfv.de/partial/mannschaftsprofil/spielplan/{}/alle"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 SIZE = 100
 MAX_ITER = 10
-ENTRY_RE = re.compile(
-    r'<div class="bfv-spieltag-eintrag">(.*?)(?=<div class="bfv-spieltag-matchups__separator|$)',
-    re.S,
-)
 
 
 class Entry(TypedDict):
@@ -58,40 +62,159 @@ def clean(x: str) -> str:
     return _collapse_whitespace(x)
 
 
+def _cache_key(url: str) -> str:
+    """Return a safe filename for caching a URL response."""
+    return hashlib.sha256(url.encode()).hexdigest()[:16]
+
+
+def _cache_get(url: str) -> str | None:
+    """Return cached content if fresh, else None."""
+    key = _cache_key(url)
+    cache_file = CACHE_DIR / f"{key}.html"
+    if not cache_file.exists():
+        return None
+    age = time.time() - cache_file.stat().st_mtime
+    if age > CACHE_TTL:
+        cache_file.unlink(missing_ok=True)
+        return None
+    return cache_file.read_text(encoding="utf-8")
+
+
+def _cache_put(url: str, content: str) -> None:
+    """Save content to cache directory."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    key = _cache_key(url)
+    (CACHE_DIR / f"{key}.html").write_text(content, encoding="utf-8")
+
+
 def fetch(url: str) -> str:
-    """Fetch a URL and return its text content."""
+    """Fetch a URL and return its text content, using local cache."""
+    cached = _cache_get(url)
+    if cached is not None:
+        return cached
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            content = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        raise ConnectionError(f"HTTP {exc.code} for {url}: {exc.reason}") from exc
+    except urllib.error.URLError as exc:
+        raise ConnectionError(f"Network error for {url}: {exc.reason}") from exc
+    _cache_put(url, content)
+    return content
+
+
+class _BFVParser(HTMLParser):
+    """Parse bfv-spieltag-eintrag blocks from BFV HTML markup."""
+
+    _FIELD_CLASSES = {
+        "bfv-spieltag-eintrag__region": "Wettbewerb",
+        "bfv-matchday-date-time": "_datetime",
+        "bfv-matchdata-result__team-name--team0": "Heim",
+        "bfv-matchdata-result__team-name--team1": "Gast",
+        "bfv-spieltag-eintrag__location": "Spielort",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._entries: list[Entry] = []
+        self._current: Entry | None = None
+        self._div_depth = 0
+        self._active_field: str | None = None
+        self._field_enter_depth: dict[str, int] = {}
+        self._datetime_raw: str = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = dict(attrs)
+        cls = attrs_dict.get("class", "")
+
+        if tag == "div" and cls == "bfv-spieltag-eintrag":
+            if self._current is not None:
+                self._entries.append(self._current)
+            self._current = {
+                "Wettbewerb": "", "Datum": "", "Uhrzeit": "",
+                "Heim": "", "Gast": "", "Spielort": "", "Link": "", "Quelle": "",
+            }
+            self._div_depth = 0
+            self._active_field = None
+            self._field_enter_depth = {}
+            self._datetime_raw = ""
+            return
+
+        if self._current is None:
+            return
+
+        if tag == "div":
+            self._div_depth += 1
+
+        if cls == "bfv-spieltag-eintrag__match-link":
+            href = attrs_dict.get("href")
+            if href:
+                self._current["Link"] = href.strip()
+
+        if tag == "div" and cls:
+            classes = cls.split()
+            for c in classes:
+                if c in self._FIELD_CLASSES:
+                    field = self._FIELD_CLASSES[c]
+                    self._active_field = field
+                    self._field_enter_depth[field] = self._div_depth
+                    if field == "_datetime":
+                        self._datetime_raw = ""
+                    break
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._current is None:
+            return
+        if tag != "div":
+            return
+
+        self._div_depth -= 1
+
+        for field in list(self._field_enter_depth.keys()):
+            if self._field_enter_depth[field] == self._div_depth + 1:
+                del self._field_enter_depth[field]
+                if self._active_field == field:
+                    self._active_field = None
+                if field == "_datetime":
+                    m = re.search(
+                        r"(\d{2}\.\d{2}\.\d{4})\s*/\s*(\d+:\d+)",
+                        self._datetime_raw,
+                    )
+                    if m:
+                        self._current["Datum"] = m.group(1)
+                        self._current["Uhrzeit"] = m.group(2)
+                break
+
+    def handle_data(self, data: str) -> None:
+        if self._current is None or not self._active_field:
+            return
+        if not data.strip():
+            return
+        if self._active_field == "_datetime":
+            self._datetime_raw += data
+        else:
+            self._current[self._active_field] += data
+
+    def close(self) -> None:
+        super().close()
+        if self._current is not None:
+            self._entries.append(self._current)
+
+
+def _clean_entry(entry: Entry) -> Entry:
+    """Apply clean() to text fields of a parsed entry."""
+    for key in ("Wettbewerb", "Datum", "Uhrzeit", "Heim", "Gast", "Spielort", "Link"):
+        entry[key] = clean(entry[key]) if entry[key] else ""
+    return entry
 
 
 def parse_entries(html_text: str) -> list[Entry]:
-    """Parse match entries from BFV HTML markup."""
-    rows: list[Entry] = []
-    for e in ENTRY_RE.findall(html_text):
-        region = re.search(r'bfv-spieltag-eintrag__region">(.*?)</div>', e, re.S)
-        link = re.search(r'bfv-spieltag-eintrag__match-link"\s+href="([^"]+)"', e)
-        dtime = re.search(
-            r"bfv-matchday-date-time\">.*?<span>\s*([0-9]{2}\.[0-9]{2}\.[0-9]{4})\s*/([0-9:.]+)\s*Uhr\s*</span>",
-            e,
-            re.S,
-        )
-        t0 = re.search(r"bfv-matchdata-result__team-name--team0[^>]*>(.*?)</div>", e, re.S)
-        t1 = re.search(r"bfv-matchdata-result__team-name--team1[^>]*>(.*?)</div>", e, re.S)
-        loc = re.search(r'bfv-spieltag-eintrag__location">(.*?)</div>', e, re.S)
-        rows.append(
-            Entry(
-                Wettbewerb=clean(region.group(1)) if region else "",
-                Datum=dtime.group(1) if dtime else "",
-                Uhrzeit=dtime.group(2) if dtime else "",
-                Heim=clean(t0.group(1)) if t0 else "",
-                Gast=clean(t1.group(1)) if t1 else "",
-                Spielort=clean(loc.group(1)) if loc else "",
-                Link=link.group(1).strip() if link else "",
-                Quelle="",
-            )
-        )
-    return rows
+    """Parse match entries from BFV HTML markup using html.parser."""
+    parser = _BFVParser()
+    parser.feed(html_text)
+    parser.close()
+    return [_clean_entry(e) for e in parser._entries]
 
 
 def fetch_all_matches(team_id: str) -> list[Entry]:
@@ -175,7 +298,7 @@ def regenerate_html(script_dir: Path) -> None:
     if visualize.exists():
         import subprocess
 
-        subprocess.run([sys.executable, str(visualize)], check=True)
+        subprocess.run([sys.executable, str(visualize)], check=True, timeout=120)
 
 
 def refresh(teams_path: Path) -> None:
