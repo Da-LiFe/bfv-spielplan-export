@@ -1,5 +1,7 @@
 import csv
 import json
+import os
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -276,6 +278,7 @@ def test_refresh_all_teams(tmp_path, monkeypatch, capsys):
     assert "Total: 10 matches" in out
     assert len(calls) == 1
     assert calls[0][1]["check"] is True
+    assert calls[0][1]["timeout"] == 120
 
 
 def test_refresh_continues_on_error(tmp_path, monkeypatch, capsys):
@@ -313,6 +316,89 @@ def test_refresh_skips_visualize_if_missing(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(fetch, "SCRIPT_DIR", tmp_path)
     fetch.refresh(teams_file)
     assert "Total: 1 matches" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------- cache()
+
+
+def test_cache_get_miss(monkeypatch):
+    monkeypatch.setattr(fetch, "CACHE_DIR", Path("/nonexistent"))
+    assert fetch._cache_get("https://example.com") is None
+
+
+def test_cache_put_and_get(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch, "CACHE_DIR", tmp_path)
+    fetch._cache_put("https://example.com", "hello world")
+    assert (tmp_path / f"{fetch._cache_key('https://example.com')}.html").exists()
+    assert fetch._cache_get("https://example.com") == "hello world"
+
+
+def test_cache_expired(tmp_path, monkeypatch):
+    import time
+    key = fetch._cache_key("https://example.com")
+    cache_file = tmp_path / f"{key}.html"
+    monkeypatch.setattr(fetch, "CACHE_DIR", tmp_path)
+    cache_file.write_text("old", encoding="utf-8")
+    # Set mtime to 2 hours ago
+    old_time = time.time() - 7200
+    os.utime(cache_file, (old_time, old_time))
+    assert fetch._cache_get("https://example.com") is None
+    assert not cache_file.exists()
+
+
+def test_fetch_uses_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch, "CACHE_DIR", tmp_path)
+    calls = []
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+        def read(self):
+            return b"cached response"
+
+    def fake_open(*args, **kwargs):
+        calls.append(args[0])
+        return FakeResp()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_open)
+    r1 = fetch.fetch("https://example.com")
+    assert r1 == "cached response"
+    assert len(calls) == 1
+    r2 = fetch.fetch("https://example.com")
+    assert r2 == "cached response"
+    assert len(calls) == 1  # no second network call
+
+
+# --------------------------------------------------------------- fetch() errors
+
+
+def test_fetch_http_error_404(monkeypatch):
+    def fake_open(*args, **kwargs):
+        raise urllib.error.HTTPError("https://example.com", 404, "Not Found", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_open)
+    with pytest.raises(ConnectionError, match="HTTP 404"):
+        fetch.fetch("https://example.com")
+
+
+def test_fetch_http_error_503(monkeypatch):
+    def fake_open(*args, **kwargs):
+        raise urllib.error.HTTPError("https://example.com", 503, "Service Unavailable", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_open)
+    with pytest.raises(ConnectionError, match="HTTP 503"):
+        fetch.fetch("https://example.com")
+
+
+def test_fetch_url_error(monkeypatch):
+    def fake_open(*args, **kwargs):
+        raise urllib.error.URLError("DNS lookup failed")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_open)
+    with pytest.raises(ConnectionError, match="Network error"):
+        fetch.fetch("https://nonexistent.invalid")
 
 
 # ------------------------------------------------------------------- main()

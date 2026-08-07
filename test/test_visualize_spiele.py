@@ -160,11 +160,13 @@ def test_load_alias_map_missing(tmp_path):
 # ------------------------------------------------------------- load_games()
 
 
-def test_load_games(monkeypatch, tmp_path):
+def test_load_games(monkeypatch, tmp_path, capsys):
     write_fixtures(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
     games, club_teams, sources = vis.load_games()
     assert len(games) == 5  # 4 rows in A (1 invalid) + 2 in B
+    err = capsys.readouterr().err
+    assert "1 Zeile(n) in tsv-a_spiele_web.csv wegen ungültigen Datums übersprungen" in err
     assert club_teams == [U15, U17]
     assert {s["file"] for s in sources} == {"tsv-a_spiele_web.csv", "tsv-b_spiele_web.csv"}
     by_file = {s["file"]: s for s in sources}
@@ -187,6 +189,27 @@ def test_load_games_no_csvs(monkeypatch, tmp_path):
     assert games == []
     assert club_teams == []
     assert sources == []
+
+
+def test_load_games_warns_on_missing_teams(monkeypatch, tmp_path, capsys):
+    write_csv(
+        tmp_path / "tsv-a_spiele_web.csv",
+        [
+            {"Wettbewerb": "U15 Kreis", "Datum": "20.09.2026", "Uhrzeit": "09:00", "Heim": U15,
+             "Gast": "FC Beispiel 1", "Spielort": "Sportpark Gilching", "Link": "https://x/1",
+             "Quelle": "https://bfv/quelle-a"},
+            {"Wettbewerb": "U15 Kreis", "Datum": "27.09.2026", "Uhrzeit": "09:30", "Heim": U15,
+             "Gast": "", "Spielort": "Auswärts", "Link": "https://x/2", "Quelle": "https://bfv/quelle-a"},
+            {"Wettbewerb": "U15 Kreis", "Datum": "03.10.2026", "Uhrzeit": "14:00", "Heim": "",
+             "Gast": "FC Beispiel 2", "Spielort": "Sportpark Gilching", "Link": "https://x/3",
+             "Quelle": "https://bfv/quelle-a"},
+        ],
+    )
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    games, club_teams, sources = vis.load_games()
+    assert len(games) == 1
+    err = capsys.readouterr().err
+    assert "2 Zeile(n) in tsv-a_spiele_web.csv ohne Heim/Gast-Team übersprungen" in err
 
 
 def test_load_games_with_aliases(monkeypatch, tmp_path):
