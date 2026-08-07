@@ -7,3 +7,4 @@ __pycache__/
 reports/
 .bfv_cache/
 .venv/
+.mypy.sarif.json
