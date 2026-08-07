@@ -5,3 +5,4 @@ vereinsspielplan.pdf
 __pycache__/
 *.pyc
 reports/
+.bfv_cache/
