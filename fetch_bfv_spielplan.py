@@ -132,8 +132,14 @@ class _BFVParser(HTMLParser):
             if self._current is not None:
                 self._entries.append(self._current)
             self._current = {
-                "Wettbewerb": "", "Datum": "", "Uhrzeit": "",
-                "Heim": "", "Gast": "", "Spielort": "", "Link": "", "Quelle": "",
+                "Wettbewerb": "",
+                "Datum": "",
+                "Uhrzeit": "",
+                "Heim": "",
+                "Gast": "",
+                "Spielort": "",
+                "Link": "",
+                "Quelle": "",
             }
             self._div_depth = 0
             self._active_field = None
@@ -254,7 +260,16 @@ def fetch_one(url: str) -> tuple[Path, int]:
     with open(out_path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(
             f,
-            fieldnames=["Wettbewerb", "Datum", "Uhrzeit", "Heim", "Gast", "Spielort", "Link", "Quelle"],
+            fieldnames=[
+                "Wettbewerb",
+                "Datum",
+                "Uhrzeit",
+                "Heim",
+                "Gast",
+                "Spielort",
+                "Link",
+                "Quelle",
+            ],
         )
         w.writeheader()
         w.writerows(rows)
@@ -322,7 +337,9 @@ def main() -> None:
         nargs="?",
         help="BFV team page URL, e.g. https://www.bfv.de/mannschaften/...",
     )
-    ap.add_argument("output", nargs="?", help="Output CSV path (default: <slug>_spiele_web.csv)")
+    ap.add_argument(
+        "output", nargs="?", help="Output CSV path (default: <slug>_spiele_web.csv)"
+    )
     ap.add_argument(
         "--refresh",
         action="store_true",

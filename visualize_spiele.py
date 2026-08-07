@@ -6,30 +6,30 @@ import json
 import re
 import sys
 import urllib.parse
-from collections import Counter, OrderedDict, defaultdict
+from collections import Counter, OrderedDict
 from datetime import datetime
 from pathlib import Path
 from string import Template
 from typing import TypedDict
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 from config import (
     CLUB_MARKERS,
     CLUB_NAME,
     CSV_DATE_FORMAT,
+    MONTHS_DE,
     PALETTE,
     SCRIPT_DIR,
-    WEEKDAYS_DE,
     WD,
-    MONTHS_DE,
+    WEEKDAYS_DE,
 )
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase.pdfmetrics import stringWidth
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 
 # Register NotoSans for proper umlaut/support in PDFs
 _FONT_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Regular.ttf"
@@ -165,12 +165,20 @@ def load_games(
                 )
             )
         if skipped:
-            print(f"Warnung: {skipped} Zeile(n) in {path.name} wegen ungültigen Datums übersprungen", file=sys.stderr)
+            print(
+                f"Warnung: {skipped} Zeile(n) in {path.name} wegen ungültigen Datums übersprungen",
+                file=sys.stderr,
+            )
         if skipped_teams:
-            print(f"Warnung: {skipped_teams} Zeile(n) in {path.name} ohne Heim/Gast-Team übersprungen", file=sys.stderr)
+            print(
+                f"Warnung: {skipped_teams} Zeile(n) in {path.name} ohne Heim/Gast-Team übersprungen",
+                file=sys.stderr,
+            )
         games.extend(file_games)
         if file_games:
-            team, source = infer_team(file_games, path.name, file_games[0].get("quelle", ""))
+            team, source = infer_team(
+                file_games, path.name, file_games[0].get("quelle", "")
+            )
             source["original"] = source["team"]
             alias = alias_map.get(source["url"])
             if alias:
@@ -225,7 +233,15 @@ def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
     """Serialize games to JSON for embedding in the HTML."""
     return json.dumps(
         [
-            {"d": g["datum"], "t": g["time"], "h": g["heim"], "a": g["gast"], "w": g["wettbewerb"], "p": g["spielort"], "l": g["link"]}
+            {
+                "d": g["datum"],
+                "t": g["time"],
+                "h": g["heim"],
+                "a": g["gast"],
+                "w": g["wettbewerb"],
+                "p": g["spielort"],
+                "l": g["link"],
+            }
             for day in days.values()
             for g in day
         ],
@@ -261,7 +277,7 @@ def render_game_row(g: Game, is_hot: bool) -> str:
         f'<td class="place" data-label="Spielort"><span class="cell"><span class="addr">{esc(place)}</span>{map_html}</span></td>'
         f'<td class="home" data-label=""><span class="cell">{home_tag}</span></td>'
         f'<td data-label="Spiel"><span class="cell">{link_html}</span></td>'
-        f'</tr>'
+        f"</tr>"
     )
 
 
@@ -279,10 +295,10 @@ def render_day_section(datum: str, games: list[Game]) -> str:
         f'<div class="table-wrap"><table><colgroup>'
         f'<col style="width:4%"><col style="width:23%"><col style="width:3%"><col style="width:23%">'
         f'<col style="width:12%"><col style="width:24%"><col style="width:3%"><col style="width:8%">'
-        f'</colgroup><thead><tr>'
-        f'<th>Zeit</th><th>Heim</th><th></th><th>Gast</th><th>Wettbewerb</th><th>Spielort</th><th></th><th></th>'
-        f'</tr></thead><tbody>{rows_html}</tbody></table></div>'
-        f'</section>'
+        f"</colgroup><thead><tr>"
+        f"<th>Zeit</th><th>Heim</th><th></th><th>Gast</th><th>Wettbewerb</th><th>Spielort</th><th></th><th></th>"
+        f"</tr></thead><tbody>{rows_html}</tbody></table></div>"
+        f"</section>"
     )
 
 
@@ -299,7 +315,9 @@ def render_footer(sources: list[Source]) -> str:
     src_links: list[str] = []
     for s in sources:
         if s["url"]:
-            src_links.append(f'<a href="{esc(s["url"])}" target="_blank">{esc(s["team"])}</a>')
+            src_links.append(
+                f'<a href="{esc(s["url"])}" target="_blank">{esc(s["team"])}</a>'
+            )
         else:
             src_links.append(esc(s["team"]))
     return f"Erstellt am {esc(german_now())}. Datenquelle: {', '.join(src_links)}"
@@ -350,16 +368,39 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
     bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
     styles = getSampleStyleSheet()
-    title = ParagraphStyle("t", parent=styles["Title"], fontSize=18, spaceAfter=2, fontName=font)
+    title = ParagraphStyle(
+        "t", parent=styles["Title"], fontSize=18, spaceAfter=2, fontName=font
+    )
     subtitle = ParagraphStyle(
-        "st", parent=styles["Normal"], textColor=colors.grey, fontSize=10, spaceAfter=14, fontName=font
+        "st",
+        parent=styles["Normal"],
+        textColor=colors.grey,
+        fontSize=10,
+        spaceAfter=14,
+        fontName=font,
     )
     day_head = ParagraphStyle(
-        "dh", parent=styles["Normal"], fontSize=11, textColor=colors.HexColor("#1a1a1a"), spaceAfter=0, fontName=font
+        "dh",
+        parent=styles["Normal"],
+        fontSize=11,
+        textColor=colors.HexColor("#1a1a1a"),
+        spaceAfter=0,
+        fontName=font,
     )
-    day_head_hot = ParagraphStyle("dhh", parent=day_head, textColor=colors.HexColor("#8a6d1a"))
-    cell = ParagraphStyle("c", parent=styles["Normal"], fontSize=8, leading=10, spaceAfter=0, fontName=font)
-    cell_white = ParagraphStyle("cw", parent=cell, textColor=colors.white, fontSize=9, fontName=font)
+    day_head_hot = ParagraphStyle(
+        "dhh", parent=day_head, textColor=colors.HexColor("#8a6d1a")
+    )
+    cell = ParagraphStyle(
+        "c",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=10,
+        spaceAfter=0,
+        fontName=font,
+    )
+    _cell_white = ParagraphStyle(
+        "cw", parent=cell, textColor=colors.white, fontSize=9, fontName=font
+    )
 
     LEFT_MARGIN = 14 * mm
     RIGHT_MARGIN = 14 * mm
@@ -377,14 +418,15 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     story = [
         Paragraph(f"Spielplan – {CLUB_NAME}", title),
         Paragraph(
-            f"{total} Spiele · {len(days)} Spieltage · {hot} Tage mit mehreren Spielen", subtitle
+            f"{total} Spiele · {len(days)} Spieltage · {hot} Tage mit mehreren Spielen",
+            subtitle,
         ),
     ]
 
     for datum, games in days.items():
         is_hot = len(games) >= 2
-        header_text = (
-            f"{games[0]['wd']}, {datum}" + (f" &nbsp;·&nbsp; {len(games)} Spiele" if is_hot else "")
+        header_text = f"{games[0]['wd']}, {datum}" + (
+            f" &nbsp;·&nbsp; {len(games)} Spiele" if is_hot else ""
         )
         story.append(Spacer(1, 6))
         story.append(Paragraph(header_text, day_head_hot if is_hot else day_head))

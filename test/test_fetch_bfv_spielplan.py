@@ -28,20 +28,30 @@ def entry(**kw):
     }
     defaults.update(kw)
     parts = ['<div class="bfv-spieltag-eintrag">']
-    parts.append(f'<div class="bfv-spieltag-eintrag__region">{defaults["region"]}</div>')
+    parts.append(
+        f'<div class="bfv-spieltag-eintrag__region">{defaults["region"]}</div>'
+    )
     if defaults["link"] is not None:
-        parts.append(f'<a class="bfv-spieltag-eintrag__match-link" href="{defaults["link"]}">')
+        parts.append(
+            f'<a class="bfv-spieltag-eintrag__match-link" href="{defaults["link"]}">'
+        )
     if defaults["datum"] is not None:
         parts.append(
             f'<div class="bfv-matchday-date-time">\n'
             f'<span class="bfv-matchday-date-time__day">So.</span>\n'
-            f'<span>\n{defaults["datum"]}\n /{defaults["zeit"]} Uhr\n</span>\n'
-            f'</div>'
+            f"<span>\n{defaults['datum']}\n /{defaults['zeit']} Uhr\n</span>\n"
+            f"</div>"
         )
-    parts.append(f'<div class="bfv-matchdata-result__team-name--team0">{defaults["team0"]}</div>')
-    parts.append(f'<div class="bfv-matchdata-result__team-name--team1">{defaults["team1"]}</div>')
+    parts.append(
+        f'<div class="bfv-matchdata-result__team-name--team0">{defaults["team0"]}</div>'
+    )
+    parts.append(
+        f'<div class="bfv-matchdata-result__team-name--team1">{defaults["team1"]}</div>'
+    )
     if defaults["location"] is not None:
-        parts.append(f'<div class="bfv-spieltag-eintrag__location">{defaults["location"]}</div>')
+        parts.append(
+            f'<div class="bfv-spieltag-eintrag__location">{defaults["location"]}</div>'
+        )
     parts.append("</div>")
     return "".join(parts)
 
@@ -86,7 +96,11 @@ def test_parse_entries_real_bfv_html():
 
 
 def test_parse_entries_multiple_separator():
-    html = entry(link="https://x/1") + SEPARATOR + entry(datum="27.09.2026", link="https://x/2")
+    html = (
+        entry(link="https://x/1")
+        + SEPARATOR
+        + entry(datum="27.09.2026", link="https://x/2")
+    )
     rows = fetch.parse_entries(html)
     assert len(rows) == 2
     assert rows[1]["Datum"] == "27.09.2026"
@@ -123,7 +137,12 @@ def test_fetch_all_matches_paginates(monkeypatch):
     def fake_fetch(url):
         calls.append(url)
         if "from=0" in url:
-            return entry(link="https://x/1") + SEPARATOR + entry(link="https://x/2") + SHOWMORE
+            return (
+                entry(link="https://x/1")
+                + SEPARATOR
+                + entry(link="https://x/2")
+                + SHOWMORE
+            )
         return entry(link="https://x/3")
 
     monkeypatch.setattr(fetch, "fetch", fake_fetch)
@@ -141,7 +160,12 @@ def test_fetch_all_matches_rate_limit(monkeypatch, capsys):
     def fake_fetch(url):
         calls.append(url)
         if "from=0" in url:
-            return entry(link="https://x/1") + SEPARATOR + entry(link="https://x/2") + SHOWMORE
+            return (
+                entry(link="https://x/1")
+                + SEPARATOR
+                + entry(link="https://x/2")
+                + SHOWMORE
+            )
         return entry(link="https://x/3")
 
     def fake_sleep(duration):
@@ -232,7 +256,9 @@ def test_fetch_one_writes_utf8_bom_csv(tmp_path, monkeypatch):
         rows = list(reader)
     assert len(rows) == 2
     assert rows[0]["Heim"] == "TSV Gilching/Argelsried 2 (7)"
-    expected_source = f"https://www.bfv.de/mannschaften/tsv-gilching-argelsried-2-7/{TEAM_ID}"
+    expected_source = (
+        f"https://www.bfv.de/mannschaften/tsv-gilching-argelsried-2-7/{TEAM_ID}"
+    )
     assert all(r["Quelle"] == expected_source for r in rows)
 
 
@@ -311,7 +337,11 @@ def test_refresh_continues_on_error(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         fetch,
         "fetch_one",
-        lambda url: (_ for _ in ()).throw(RuntimeError("kaputt")) if "tsv-slug" in url else (Path("a.csv"), 5),
+        lambda url: (
+            (_ for _ in ()).throw(RuntimeError("kaputt"))
+            if "tsv-slug" in url
+            else (Path("a.csv"), 5)
+        ),
     )
     monkeypatch.setattr("subprocess.run", lambda *a, **k: None)
     fetch.refresh(teams_file)
@@ -359,6 +389,7 @@ def test_cache_put_and_get(tmp_path, monkeypatch):
 
 def test_cache_expired(tmp_path, monkeypatch):
     import time
+
     key = fetch._cache_key("https://example.com")
     cache_file = tmp_path / f"{key}.html"
     monkeypatch.setattr(fetch, "CACHE_DIR", tmp_path)
@@ -377,8 +408,10 @@ def test_fetch_uses_cache(tmp_path, monkeypatch):
     class FakeResp:
         def __enter__(self):
             return self
+
         def __exit__(self, *a):
             pass
+
         def read(self):
             return b"cached response"
 
@@ -409,7 +442,9 @@ def test_fetch_http_error_404(monkeypatch):
 
 def test_fetch_http_error_503(monkeypatch):
     def fake_open(*args, **kwargs):
-        raise urllib.error.HTTPError("https://example.com", 503, "Service Unavailable", {}, None)
+        raise urllib.error.HTTPError(
+            "https://example.com", 503, "Service Unavailable", {}, None
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", fake_open)
     with pytest.raises(ConnectionError, match="HTTP 503"):

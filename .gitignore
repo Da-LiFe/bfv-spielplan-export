@@ -1,6 +1,6 @@
-spielplan.html
-spielplan.pdf
-vereinsspielplan.pdf
+./spielplan.html
+./spielplan.pdf
+./vereinsspielplan.pdf
 *_spiele_web.csv
 __pycache__/
 *.pyc

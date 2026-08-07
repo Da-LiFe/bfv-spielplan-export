@@ -2,7 +2,6 @@ import csv
 import json
 import re
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -11,7 +10,16 @@ import visualize_spiele as vis
 U15 = "TSV Gilching/Argelsried U15"
 U17 = "TSV Gilching/Argelsried U17"
 
-CSV_HEADER = ["Wettbewerb", "Datum", "Uhrzeit", "Heim", "Gast", "Spielort", "Link", "Quelle"]
+CSV_HEADER = [
+    "Wettbewerb",
+    "Datum",
+    "Uhrzeit",
+    "Heim",
+    "Gast",
+    "Spielort",
+    "Link",
+    "Quelle",
+]
 
 
 def write_csv(path, rows):
@@ -25,26 +33,71 @@ def write_fixtures(tmp_path):
     write_csv(
         tmp_path / "tsv-a_spiele_web.csv",
         [
-            {"Wettbewerb": "U15 Kreis", "Datum": "20.09.2026", "Uhrzeit": "09:00", "Heim": U15,
-             "Gast": "FC Beispiel 1", "Spielort": "Sportpark Gilching", "Link": "https://x/1",
-             "Quelle": "https://bfv/quelle-a"},
-            {"Wettbewerb": "U15 Kreis", "Datum": "27.09.2026", "Uhrzeit": "09:30", "Heim": "FC Beispiel 1",
-             "Gast": U15, "Spielort": "Auswärts", "Link": "https://x/2", "Quelle": "https://bfv/quelle-a"},
-            {"Wettbewerb": "U15 Kreis", "Datum": "03.10.2026", "Uhrzeit": "14:00", "Heim": U15,
-             "Gast": "FC Beispiel 2", "Spielort": "Sportpark Gilching", "Link": "https://x/3",
-             "Quelle": "https://bfv/quelle-a"},
-            {"Wettbewerb": "U15 Kreis", "Datum": "kaputt", "Uhrzeit": "10:00", "Heim": U15,
-             "Gast": "FC Kaputt", "Spielort": "", "Link": "", "Quelle": "https://bfv/quelle-a"},
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": "20.09.2026",
+                "Uhrzeit": "09:00",
+                "Heim": U15,
+                "Gast": "FC Beispiel 1",
+                "Spielort": "Sportpark Gilching",
+                "Link": "https://x/1",
+                "Quelle": "https://bfv/quelle-a",
+            },
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": "27.09.2026",
+                "Uhrzeit": "09:30",
+                "Heim": "FC Beispiel 1",
+                "Gast": U15,
+                "Spielort": "Auswärts",
+                "Link": "https://x/2",
+                "Quelle": "https://bfv/quelle-a",
+            },
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": "03.10.2026",
+                "Uhrzeit": "14:00",
+                "Heim": U15,
+                "Gast": "FC Beispiel 2",
+                "Spielort": "Sportpark Gilching",
+                "Link": "https://x/3",
+                "Quelle": "https://bfv/quelle-a",
+            },
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": "kaputt",
+                "Uhrzeit": "10:00",
+                "Heim": U15,
+                "Gast": "FC Kaputt",
+                "Spielort": "",
+                "Link": "",
+                "Quelle": "https://bfv/quelle-a",
+            },
         ],
     )
     write_csv(
         tmp_path / "tsv-b_spiele_web.csv",
         [
-            {"Wettbewerb": "U17 Kreis", "Datum": "10.10.2026", "Uhrzeit": "11:00", "Heim": U17,
-             "Gast": "SV Anderer", "Spielort": "Beispielhalle", "Link": "https://x/4",
-             "Quelle": "https://bfv/quelle-b"},
-            {"Wettbewerb": "U17 Kreis", "Datum": "17.10.2026", "Uhrzeit": "13:00", "Heim": "SV Dritter",
-             "Gast": U17, "Spielort": "Halle 2", "Link": "https://x/5", "Quelle": "https://bfv/quelle-b"},
+            {
+                "Wettbewerb": "U17 Kreis",
+                "Datum": "10.10.2026",
+                "Uhrzeit": "11:00",
+                "Heim": U17,
+                "Gast": "SV Anderer",
+                "Spielort": "Beispielhalle",
+                "Link": "https://x/4",
+                "Quelle": "https://bfv/quelle-b",
+            },
+            {
+                "Wettbewerb": "U17 Kreis",
+                "Datum": "17.10.2026",
+                "Uhrzeit": "13:00",
+                "Heim": "SV Dritter",
+                "Gast": U17,
+                "Spielort": "Halle 2",
+                "Link": "https://x/5",
+                "Quelle": "https://bfv/quelle-b",
+            },
         ],
     )
 
@@ -87,7 +140,9 @@ def test_team_color_empty_is_grey():
 
 
 def test_team_color_deterministic():
-    assert vis.team_color("TSV Gilching/Argelsried U15") == vis.team_color("TSV Gilching/Argelsried U15")
+    assert vis.team_color("TSV Gilching/Argelsried U15") == vis.team_color(
+        "TSV Gilching/Argelsried U15"
+    )
 
 
 # ------------------------------------------------------------- short_place()
@@ -132,7 +187,9 @@ def test_esc_quotes():
 
 def test_german_now_format():
     out = vis.german_now()
-    assert re.match(r"^[A-Z][a-zäöü]+, \d{1,2}\. [A-Za-zäöü]+ \d{4}, \d{2}:\d{2} Uhr$", out)
+    assert re.match(
+        r"^[A-Z][a-zäöü]+, \d{1,2}\. [A-Za-zäöü]+ \d{4}, \d{2}:\d{2} Uhr$", out
+    )
 
 
 # ----------------------------------------------------------- load_alias_map()
@@ -166,9 +223,14 @@ def test_load_games(monkeypatch, tmp_path, capsys):
     games, club_teams, sources = vis.load_games()
     assert len(games) == 5  # 4 rows in A (1 invalid) + 2 in B
     err = capsys.readouterr().err
-    assert "1 Zeile(n) in tsv-a_spiele_web.csv wegen ungültigen Datums übersprungen" in err
+    assert (
+        "1 Zeile(n) in tsv-a_spiele_web.csv wegen ungültigen Datums übersprungen" in err
+    )
     assert club_teams == [U15, U17]
-    assert {s["file"] for s in sources} == {"tsv-a_spiele_web.csv", "tsv-b_spiele_web.csv"}
+    assert {s["file"] for s in sources} == {
+        "tsv-a_spiele_web.csv",
+        "tsv-b_spiele_web.csv",
+    }
     by_file = {s["file"]: s for s in sources}
     assert by_file["tsv-a_spiele_web.csv"]["team"] == U15
     assert by_file["tsv-a_spiele_web.csv"]["url"] == "https://bfv/quelle-a"
@@ -195,14 +257,36 @@ def test_load_games_warns_on_missing_teams(monkeypatch, tmp_path, capsys):
     write_csv(
         tmp_path / "tsv-a_spiele_web.csv",
         [
-            {"Wettbewerb": "U15 Kreis", "Datum": "20.09.2026", "Uhrzeit": "09:00", "Heim": U15,
-             "Gast": "FC Beispiel 1", "Spielort": "Sportpark Gilching", "Link": "https://x/1",
-             "Quelle": "https://bfv/quelle-a"},
-            {"Wettbewerb": "U15 Kreis", "Datum": "27.09.2026", "Uhrzeit": "09:30", "Heim": U15,
-             "Gast": "", "Spielort": "Auswärts", "Link": "https://x/2", "Quelle": "https://bfv/quelle-a"},
-            {"Wettbewerb": "U15 Kreis", "Datum": "03.10.2026", "Uhrzeit": "14:00", "Heim": "",
-             "Gast": "FC Beispiel 2", "Spielort": "Sportpark Gilching", "Link": "https://x/3",
-             "Quelle": "https://bfv/quelle-a"},
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": "20.09.2026",
+                "Uhrzeit": "09:00",
+                "Heim": U15,
+                "Gast": "FC Beispiel 1",
+                "Spielort": "Sportpark Gilching",
+                "Link": "https://x/1",
+                "Quelle": "https://bfv/quelle-a",
+            },
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": "27.09.2026",
+                "Uhrzeit": "09:30",
+                "Heim": U15,
+                "Gast": "",
+                "Spielort": "Auswärts",
+                "Link": "https://x/2",
+                "Quelle": "https://bfv/quelle-a",
+            },
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": "03.10.2026",
+                "Uhrzeit": "14:00",
+                "Heim": "",
+                "Gast": "FC Beispiel 2",
+                "Spielort": "Sportpark Gilching",
+                "Link": "https://x/3",
+                "Quelle": "https://bfv/quelle-a",
+            },
         ],
     )
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
@@ -313,7 +397,9 @@ def test_render_team_checks():
 
 
 def test_render_team_checks_with_aliases():
-    html = vis.render_team_checks(["TSV Gilching/Argelsried u15w", "TSV Gilching/Argelsried u17w"])
+    html = vis.render_team_checks(
+        ["TSV Gilching/Argelsried u15w", "TSV Gilching/Argelsried u17w"]
+    )
     assert 'value="TSV Gilching/Argelsried u15w"' in html
     assert 'value="TSV Gilching/Argelsried u17w"' in html
 
@@ -328,7 +414,7 @@ def test_render_footer():
     ]
     footer = vis.render_footer(sources)
     assert '<a href="https://bfv/x"' in footer
-    assert f'>{U15}</a>' in footer
+    assert f">{U15}</a>" in footer
     assert vis.esc(U17) in footer
     assert "Datenquelle:" in footer
 
@@ -360,15 +446,32 @@ def test_render_games_js():
 def test_build_html(tmp_path):
     out = tmp_path / "spielplan.html"
     days = {
-        "20.09.2026": [make_game("20.09.2026", "10:00", "TSV Gilching/Argelsried & Co", "FC <i>Gast</i>",
-                                 spielort="Sportpark | Gilching")],
+        "20.09.2026": [
+            make_game(
+                "20.09.2026",
+                "10:00",
+                "TSV Gilching/Argelsried & Co",
+                "FC <i>Gast</i>",
+                spielort="Sportpark | Gilching",
+            )
+        ],
         "27.09.2026": [
-            make_game("27.09.2026", "14:00", "TSV Gilching/Argelsried & Co", "FC Gast 2"),
-            make_game("27.09.2026", "16:00", "FC Gast 3", "TSV Gilching/Argelsried & Co"),
+            make_game(
+                "27.09.2026", "14:00", "TSV Gilching/Argelsried & Co", "FC Gast 2"
+            ),
+            make_game(
+                "27.09.2026", "16:00", "FC Gast 3", "TSV Gilching/Argelsried & Co"
+            ),
         ],
     }
     clubs = ["TSV Gilching/Argelsried & Co"]
-    sources = [{"file": "x.csv", "team": "TSV Gilching/Argelsried & Co", "url": "https://bfv/x"}]
+    sources = [
+        {
+            "file": "x.csv",
+            "team": "TSV Gilching/Argelsried & Co",
+            "url": "https://bfv/x",
+        }
+    ]
     vis.build_html(days, clubs, sources, out)
     html = out.read_text(encoding="utf-8")
     assert "<script>" in html
@@ -384,7 +487,9 @@ def test_build_html(tmp_path):
     assert "1 Tage mit mehreren Spielen" in html
     assert "google.com/maps" in html
     assert "Datenquelle:" in html
-    assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
+    assert (
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' in html
+    )
     assert 'class="table-wrap"' in html
     assert 'data-label="Heim"' in html
     assert 'data-label="Gast"' in html
@@ -400,7 +505,13 @@ def test_build_html(tmp_path):
 
 def test_build_html_embeds_alias_map(tmp_path):
     out = tmp_path / "spielplan.html"
-    days = {"20.09.2026": [make_game("20.09.2026", "10:00", "TSV Gilching/Argelsried 2 (7)", "FC Gegner")]}
+    days = {
+        "20.09.2026": [
+            make_game(
+                "20.09.2026", "10:00", "TSV Gilching/Argelsried 2 (7)", "FC Gegner"
+            )
+        ]
+    }
     clubs = ["TSV Gilching/Argelsried u15w2"]
     sources = [
         {
@@ -412,9 +523,12 @@ def test_build_html_embeds_alias_map(tmp_path):
     ]
     vis.build_html(days, clubs, sources, out)
     html = out.read_text(encoding="utf-8")
-    assert 'const TEAM_ALIASES = [["TSV Gilching/Argelsried u15w2", "TSV Gilching/Argelsried 2 (7)"]]' in html
+    assert (
+        'const TEAM_ALIASES = [["TSV Gilching/Argelsried u15w2", "TSV Gilching/Argelsried 2 (7)"]]'
+        in html
+    )
     assert 'value="TSV Gilching/Argelsried u15w2"' in html
-    assert 'aliasToOriginal' in html
+    assert "aliasToOriginal" in html
 
 
 # --------------------------------------------------------------- build_pdf()
@@ -423,10 +537,18 @@ def test_build_html_embeds_alias_map(tmp_path):
 def test_build_pdf(tmp_path):
     out = tmp_path / "spielplan.pdf"
     days = {
-        "20.09.2026": [make_game("20.09.2026", "10:00", "TSV Gilching/Argelsried U15", "FC Beispiel 1")],
+        "20.09.2026": [
+            make_game(
+                "20.09.2026", "10:00", "TSV Gilching/Argelsried U15", "FC Beispiel 1"
+            )
+        ],
         "27.09.2026": [
-            make_game("27.09.2026", "14:00", "TSV Gilching/Argelsried U15", "FC Beispiel 2"),
-            make_game("27.09.2026", "16:00", "FC Beispiel 3", "TSV Gilching/Argelsried U15"),
+            make_game(
+                "27.09.2026", "14:00", "TSV Gilching/Argelsried U15", "FC Beispiel 2"
+            ),
+            make_game(
+                "27.09.2026", "16:00", "FC Beispiel 3", "TSV Gilching/Argelsried U15"
+            ),
         ],
     }
     vis.build_pdf(days, out)
