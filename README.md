@@ -36,6 +36,9 @@ python3 fetch_bfv_spielplan.py <bfv-url>
 # Fetch a single team to a specific file
 python3 fetch_bfv_spielplan.py <bfv-url> <output.csv>
 
+# Use a teams file in a different location
+python3 fetch_bfv_spielplan.py --refresh --teams /path/to/teams.json
+
 # Generate HTML/PDF only, from existing CSVs
 python3 visualize_spiele.py
 ```
