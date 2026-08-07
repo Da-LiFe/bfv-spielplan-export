@@ -23,9 +23,19 @@ from config import (
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+
+# Register NotoSans for proper umlaut/support in PDFs
+_FONT_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Regular.ttf"
+_FONT_BOLD_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Bold.ttf"
+if _FONT_PATH.exists():
+    pdfmetrics.registerFont(TTFont("NotoSans", str(_FONT_PATH)))
+if _FONT_BOLD_PATH.exists():
+    pdfmetrics.registerFont(TTFont("NotoSans-Bold", str(_FONT_BOLD_PATH)))
 
 
 class Source(TypedDict):
@@ -121,12 +131,18 @@ def load_games(
             print(f"Warnung: {path.name} nicht lesbar ({exc})", file=sys.stderr)
             continue
         file_games: list[Game] = []
+        skipped = 0
+        skipped_teams = 0
         for r in rows:
             d = parse_datum(r.get("Datum", ""))
             if d is None:
+                skipped += 1
                 continue
             heim = (r.get("Heim") or "").strip()
             gast = (r.get("Gast") or "").strip()
+            if not heim or not gast:
+                skipped_teams += 1
+                continue
             home_l = heim.lower()
             file_games.append(
                 Game(
@@ -146,6 +162,10 @@ def load_games(
                     away_color=team_color(gast),
                 )
             )
+        if skipped:
+            print(f"Warnung: {skipped} Zeile(n) in {path.name} wegen ungültigen Datums übersprungen", file=sys.stderr)
+        if skipped_teams:
+            print(f"Warnung: {skipped_teams} Zeile(n) in {path.name} ohne Heim/Gast-Team übersprungen", file=sys.stderr)
         games.extend(file_games)
         if file_games:
             team, source = infer_team(file_games, path.name, file_games[0].get("quelle", ""))
@@ -600,17 +620,19 @@ def build_html(
 
 def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     """Build a multi-page PDF overview of all games."""
+    font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
+    bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
     styles = getSampleStyleSheet()
-    title = ParagraphStyle("t", parent=styles["Title"], fontSize=18, spaceAfter=2)
+    title = ParagraphStyle("t", parent=styles["Title"], fontSize=18, spaceAfter=2, fontName=font)
     subtitle = ParagraphStyle(
-        "st", parent=styles["Normal"], textColor=colors.grey, fontSize=10, spaceAfter=14
+        "st", parent=styles["Normal"], textColor=colors.grey, fontSize=10, spaceAfter=14, fontName=font
     )
     day_head = ParagraphStyle(
-        "dh", parent=styles["Normal"], fontSize=11, textColor=colors.HexColor("#1a1a1a"), spaceAfter=0
+        "dh", parent=styles["Normal"], fontSize=11, textColor=colors.HexColor("#1a1a1a"), spaceAfter=0, fontName=font
     )
     day_head_hot = ParagraphStyle("dhh", parent=day_head, textColor=colors.HexColor("#8a6d1a"))
-    cell = ParagraphStyle("c", parent=styles["Normal"], fontSize=8, leading=10, spaceAfter=0)
-    cell_white = ParagraphStyle("cw", parent=cell, textColor=colors.white, fontSize=9)
+    cell = ParagraphStyle("c", parent=styles["Normal"], fontSize=8, leading=10, spaceAfter=0, fontName=font)
+    cell_white = ParagraphStyle("cw", parent=cell, textColor=colors.white, fontSize=9, fontName=font)
 
     LEFT_MARGIN = 14 * mm
     RIGHT_MARGIN = 14 * mm
@@ -678,9 +700,9 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
                 [
                     ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2f7")),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#666666")),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, 0), (-1, 0), bold_font),
                     ("FONTSIZE", (0, 0), (-1, 0), 8),
-                    ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                    ("FONTNAME", (0, 1), (-1, -1), font),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e0e0e0")),
                     ("LEFTPADDING", (0, 0), (-1, -1), 6),
