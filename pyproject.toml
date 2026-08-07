@@ -38,7 +38,7 @@ source = ["."]
 omit = ["test/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
-fail_under = 0
+fail_under = 90
 
 [tool.mypy]
 python_version = "3.12"

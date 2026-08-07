@@ -7,6 +7,45 @@ on:
     branches: [main]
 
 jobs:
+  lint-ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create venv and install dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[dev]"
+      - name: Ruff check
+        run: .venv/bin/ruff check . --output-format=github
+      - name: Ruff format
+        run: .venv/bin/ruff format --check .
+
+  typecheck-mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create venv and install dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[dev]"
+      - name: Mypy type check
+        run: .venv/bin/mypy .
+      - name: Generate SARIF report
+        run: .venv/bin/python tools/mypy_to_sarif.py
+      - name: Upload SARIF to GitHub Checks
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .mypy.sarif.json
+          category: typecheck
+
   test-python:
     runs-on: ubuntu-latest
     steps:
@@ -20,5 +59,8 @@ jobs:
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -e ".[dev]"
       - name: Run tests with coverage
-        run: |
-          .venv/bin/pytest test/ -v --cov=. --cov-report=term-missing
+        run: .venv/bin/pytest test/ -v --cov=. --cov-report=html --cov-report=term-missing
+      - name: Upload coverage to GitHub Checks
+        uses: github-actions-coverage/github-actions-coverage@v1
+        with:
+          min-coverage: 90
