@@ -266,7 +266,7 @@ def test_render_day_section_hot():
     section = vis.render_day_section("20.09.2026", games)
     assert 'class="day-header hot"' in section
     assert 'class="badge"' in section
-    assert 'style="display:none"' not in section
+    assert 'class="badge" style="display:none"' not in section
     assert "⚠ 2 Spiele" in section
 
 

@@ -249,10 +249,11 @@ def render_day_section(datum: str, games: list[Game]) -> str:
     badge_style = "" if is_hot else ' style="display:none"'
     badge = f'<span class="badge"{badge_style}>⚠ {len(games)} Spiele</span>'
     header_cls = "day-header hot" if is_hot else "day-header"
+    hidden_cls = ' class="hidden-teams" style="display:none"'
     rows_html = "".join(render_game_row(g, is_hot) for g in games)
     return (
         f'<section class="day" data-datum="{esc(datum)}">'
-        f'<div class="{header_cls}"><span class="when">{esc(games[0]["wd"])}, {esc(datum)}</span>{badge}</div>'
+        f'<div class="{header_cls}"><span class="when">{esc(games[0]["wd"])}, {esc(datum)}</span><span>{badge}<span{hidden_cls}></span></span></div>'
         f'<div class="table-wrap"><table><colgroup>'
         f'<col style="width:4%"><col style="width:23%"><col style="width:3%"><col style="width:23%">'
         f'<col style="width:12%"><col style="width:24%"><col style="width:3%"><col style="width:8%">'
@@ -328,7 +329,8 @@ def build_html(
   .day {{ background:#fff; border:1px solid #e0e0e0; border-radius:8px; margin-bottom:18px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.05); }}
   .day-header {{ padding:10px 14px; font-weight:600; background:#eef2f7; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; justify-content:space-between; }}
   .day-header.hot {{ background:#fff3cd; border-bottom:1px solid #ffc107; }}
-  .badge {{ background:#dc3545; color:#fff; font-size:12px; padding:2px 10px; border-radius:12px; font-weight:600; }}
+  .badge {{ background:#dc3545; color:#fff; font-size:12px; padding:2px 10px; border-radius:12px; font-weight:600; display:block; margin-bottom:2px; }}
+  .hidden-teams {{ font-size:12px; color:#856404; display:block; font-weight:400; }}
   table {{ border-collapse:collapse; width:100%; table-layout:fixed; }}
   th {{ text-align:left; font-size:11px; text-transform:uppercase; color:#888; padding:6px 10px; border-bottom:1px solid #eee; }}
   td {{ padding:8px 10px; border-bottom:1px solid #f0f0f0; font-size:14px; vertical-align:middle; }}
@@ -419,6 +421,7 @@ def build_html(
   const summaryAll = document.getElementById('summary').innerHTML;
   const allCheck = document.getElementById('allTeams');
   const teamChecks = Array.from(document.querySelectorAll('input[data-team]'));
+  const clubTeamsSet = new Set(teamChecks.map(c => c.value));
   const sections = Array.from(document.querySelectorAll('.day'));
 
   function selectedTeams() {{
@@ -450,20 +453,37 @@ def build_html(
       }});
       const header = section.querySelector('.day-header');
       const badge = section.querySelector('.badge');
+      const hiddenEl = section.querySelector('.hidden-teams');
       if (visible === 0) {{
         section.style.display = 'none';
       }} else {{
         section.style.display = '';
         daysShown++;
         gamesShown += visible;
-        if (visible >= 2) {{
+        const totalGames = trs.length;
+        if (totalGames >= 2) {{
           hotShown++;
           header.classList.add('hot');
-          badge.textContent = '⚠ ' + visible + ' Spiele';
+          badge.textContent = '⚠ ' + totalGames + ' Spiele';
           badge.style.display = '';
+          const hiddenTeams = new Set();
+          trs.forEach(tr => {{
+            const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
+            if (!show) {{
+              if (clubTeamsSet.has(tr.dataset.heim)) hiddenTeams.add(tr.dataset.heim);
+              if (clubTeamsSet.has(tr.dataset.gast)) hiddenTeams.add(tr.dataset.gast);
+            }}
+          }});
+          if (hiddenTeams.size > 0) {{
+            hiddenEl.textContent = 'Nicht ausgewählt: ' + Array.from(hiddenTeams).join(', ');
+            hiddenEl.style.display = '';
+          }} else {{
+            hiddenEl.style.display = 'none';
+          }}
         }} else {{
           header.classList.remove('hot');
           badge.style.display = 'none';
+          hiddenEl.style.display = 'none';
         }}
       }}
     }});
