@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "spielplan",
+  "project_id": "6b03b719-14a0-431c-a356-7b3cbb1da871"
+}

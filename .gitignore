@@ -5,6 +5,13 @@
 __pycache__/
 *.pyc
 reports/
+!reports/project-report.md
 .bfv_cache/
 .venv/
 .mypy.sarif.json
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
