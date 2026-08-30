@@ -138,10 +138,15 @@ $sections
       }
       const trs = Array.from(section.querySelectorAll('tbody tr'));
       let visible = 0;
+      let selectedTeamsOnDay = new Set();
       trs.forEach(tr => {
         const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
         tr.style.display = show ? '' : 'none';
-        if (show) visible++;
+        if (show) {
+          visible++;
+          if (clubTeamsSet.has(tr.dataset.heim)) selectedTeamsOnDay.add(tr.dataset.heim);
+          if (clubTeamsSet.has(tr.dataset.gast)) selectedTeamsOnDay.add(tr.dataset.gast);
+        }
       });
       const header = section.querySelector('.day-header');
       const badge = section.querySelector('.badge');
@@ -153,29 +158,38 @@ $sections
         daysShown++;
         gamesShown += visible;
         const totalGames = trs.length;
+        const hasConflict = selectedTeamsOnDay.size >= 2;
         if (totalGames >= 2) {
-          hotShown++;
-          header.classList.add('hot');
           badge.textContent = '⚠ ' + totalGames + ' Spiele';
           badge.style.display = '';
-          const hiddenTeams = new Set();
-          trs.forEach(tr => {
-            const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
-            if (!show) {
-              if (clubTeamsSet.has(tr.dataset.heim)) hiddenTeams.add(tr.dataset.heim);
-              if (clubTeamsSet.has(tr.dataset.gast)) hiddenTeams.add(tr.dataset.gast);
+          const hasMultipleVisible = visible >= 2;
+          if (hasMultipleVisible) {
+            const hiddenTeams = new Set();
+            trs.forEach(tr => {
+              const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
+              if (!show) {
+                if (clubTeamsSet.has(tr.dataset.heim)) hiddenTeams.add(tr.dataset.heim);
+                if (clubTeamsSet.has(tr.dataset.gast)) hiddenTeams.add(tr.dataset.gast);
+              }
+            });
+            if (hiddenTeams.size > 0) {
+              hiddenEl.textContent = 'Nicht ausgewählt: ' + Array.from(hiddenTeams).join(', ');
+              hiddenEl.style.display = '';
+            } else {
+              hiddenEl.style.display = 'none';
             }
-          });
-          if (hiddenTeams.size > 0) {
-            hiddenEl.textContent = 'Nicht ausgewählt: ' + Array.from(hiddenTeams).join(', ');
-            hiddenEl.style.display = '';
           } else {
             hiddenEl.style.display = 'none';
           }
         } else {
-          header.classList.remove('hot');
           badge.style.display = 'none';
           hiddenEl.style.display = 'none';
+        }
+        if (hasConflict) {
+          header.classList.add('hot');
+          hotShown++;
+        } else {
+          header.classList.remove('hot');
         }
       }
     });

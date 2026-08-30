@@ -344,9 +344,32 @@ section('Hot day badge');
   const day3 = s.sections.find((sec) => sec.dataset.datum === fmtDate(3));
   const header = day3.querySelector('.day-header');
   const badge = day3.querySelector('.badge');
-  check(header.classList.contains('hot'), 'hot day header has class');
+  check(header.classList.contains('hot') === false, 'header not colored when only 1 team on day');
+  check(badge.style.display === '', 'badge shown for multiple visible games');
+  check(badge.textContent.includes('2 Spiele'), 'badge text counts total games on day');
+}
+
+section('Hot day header with 2 selected teams');
+{
+  const s = buildScenario();
+  s.teamChecks[0].checked = true;
+  s.teamChecks[1].checked = true;
+  fire(s.teamChecks[0], 'change');
+  const day3 = s.sections.find((sec) => sec.dataset.datum === fmtDate(3));
+  const header = day3.querySelector('.day-header');
+  const badge = day3.querySelector('.badge');
+  check(header.classList.contains('hot'), 'header colored when 2 teams have games on same day');
   check(badge.style.display === '', 'badge shown');
-  check(badge.textContent.includes('2 Spiele'), 'badge text counts visible games');
+}
+
+section('Badge hidden when only 1 visible game');
+{
+  const s = buildScenario();
+  s.teamChecks[0].checked = true;
+  fire(s.teamChecks[0], 'change');
+  const day6 = s.sections.find((sec) => sec.dataset.datum === fmtDate(6));
+  const badge = day6.querySelector('.badge');
+  check(badge.style.display === 'none', 'badge hidden when only 1 visible game');
 }
 
 function icsEndExpected(d, t) {
