@@ -243,7 +243,42 @@ def fetch_all_matches(team_id: str) -> list[Entry]:
     return all_rows
 
 
-def fetch_one(url: str) -> tuple[Path, int]:
+def _resolve_team_name(html: str, url: str) -> str:
+    """Extract a display name for a team from its BFV profile page HTML."""
+    title_match = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    if title_match:
+        title = title_match.group(1).strip()
+        for suffix in ["– bfv.de", " - bfv.de", " | bfv.de", "– bfv", " | bfv"]:
+            if suffix in title:
+                title = title.split(suffix)[0].strip()
+                break
+        if title:
+            return title
+    parts = [p for p in url.rstrip("/").split("/") if p]
+    if len(parts) >= 2:
+        slug = parts[-2]
+        return slug.replace("-", " ").title()
+    return url
+
+
+def _ensure_team_in_teams_json(url: str, alias: str, teams_path: Path) -> None:
+    """Add url to teams.json if not already present."""
+    if teams_path.exists():
+        try:
+            data = json.loads(teams_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data: list[dict] = []
+    else:
+        data = []
+    for entry in data:
+        if isinstance(entry, dict) and entry.get("url") == url:
+            return
+    data.append({"url": url, "alias": alias})
+    teams_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f'Added "{alias}" ({url}) to teams.json')
+
+
+def fetch_one(url: str, teams_path: Path | None = None) -> tuple[Path, int]:
     """Fetch a single team's schedule and write it to a CSV file."""
     parts = [p for p in url.rstrip("/").split("/") if p]
     if not parts:
@@ -273,6 +308,10 @@ def fetch_one(url: str) -> tuple[Path, int]:
         )
         w.writeheader()
         w.writerows(rows)
+    if teams_path is not None:
+        profile_html = fetch(quelle)
+        alias = _resolve_team_name(profile_html, url)
+        _ensure_team_in_teams_json(url, alias, teams_path)
     return out_path, len(rows)
 
 
@@ -358,8 +397,10 @@ def main() -> None:
     if not args.url:
         ap.error("URL or --refresh is required")
 
+    teams_path = Path(args.teams) if args.teams else SCRIPT_DIR / "teams.json"
+
     try:
-        out_path, n = fetch_one(args.url)
+        out_path, n = fetch_one(args.url, teams_path)
     except Exception as exc:
         sys.exit(f"Error fetching data: {exc}")
     if args.output:
