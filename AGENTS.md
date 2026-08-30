@@ -92,11 +92,8 @@ bd update bd-42 --priority 1 --json
   ```python
   # /tmp/fix_issue.py
   import subprocess
-  desc = (
-      "Problem: ...\n"
-      "\n"
-      "Expected: ...\n"
-  )
+
+  desc = "Problem: ...\n\nExpected: ...\n"
   subprocess.run(["bd", "update", "bd-42", "--description", desc, "--json"], check=True)
   ```
   ```bash

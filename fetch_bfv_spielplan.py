@@ -267,14 +267,16 @@ def _ensure_team_in_teams_json(url: str, alias: str, teams_path: Path) -> None:
         try:
             data = json.loads(teams_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            data: list[dict] = []
+            data = []
     else:
         data = []
     for entry in data:
         if isinstance(entry, dict) and entry.get("url") == url:
             return
     data.append({"url": url, "alias": alias})
-    teams_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    teams_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     print(f'Added "{alias}" ({url}) to teams.json')
 
 
