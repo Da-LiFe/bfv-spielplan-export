@@ -1,8 +1,8 @@
 # Spielplan TSV Gilching/Argelsried — Consolidated Project Report
 
 **As of:** 2026-08-08  
-**Full commit range:** `872bdb4..cb2df4d` · **30 commits**  
-**Tests:** pytest 9.1.1 — **59 green** (Python) · JS harness not runnable (no Node)
+**Full commit range:** `872bdb4..127260c` · **31 commits**  
+**Tests:** pytest 9.1.1 — **68 green** (Python) · JS harness not runnable (no Node)
 
 ---
 
@@ -62,7 +62,8 @@ mypy .
 
 - **Team filter (multi-select):** checkboxes per club team; "All teams" default.
 - **Hide past games:** active by default; works with team filter.
-- **Same-day highlight:** ≥2 games → amber background + badge "⚠ N games".
+- **Same-day badge:** always shown when ≥2 games on the day ("⚠ N Spiele").
+- **Same-day highlight:** amber header background only when ≥2 selected teams have games on the same day.
 - **H/A badge:** home (green) / away (grey) via `CLUB_MARKERS`.
 - **Map ↗:** Google Maps link to venue.
 - **Match ↗:** link to BFV match page.
@@ -75,7 +76,7 @@ mypy .
 
 ---
 
-## Git History (30 commits)
+## Git History (31 commits)
 
 ### Phase 1: Foundation (`872bdb4..954496c`) — 3 commits
 
@@ -149,6 +150,17 @@ mypy .
 - HTML template extracted to `templates/spielplan.html`
 - `pytest.ini` deleted (consolidated into `pyproject.toml`)
 
+### Phase 5: Conflict filter awareness (`cb2df4d..127260c`) — 1 commit
+
+| Commit | Message |
+|--------|---------|
+| `127260c` | fix(js): only color day header when 2+ selected teams have games |
+
+**Key changes:**
+- Day header amber coloring now only triggers when ≥2 distinct selected teams have games on the same day
+- Badge (conflict marker) remains based on total games per day (unaffected by team filter)
+- Added JS tests for single-team conflict, multi-team conflict, and single-visible-game cases
+
 ---
 
 ## Configuration
@@ -181,7 +193,7 @@ mypy .
 
 ## Tests & Verification
 
-- **Python (pytest):** 59 tests green
+- **Python (pytest):** 68 tests green
   - `test_fetch_bfv_spielplan.py`: fetcher tests (clean, parse_entries, pagination, CSV write, refresh, main)
   - `test_visualize_spiele.py`: generator tests (parse_datum, team_color, short_place, maps_url, esc, german_now, load_games, group_by_day, build_html, build_pdf, main)
 - **JS harness:** `test/spielplan.test.mjs` — 38 tests (not runnable without Node)

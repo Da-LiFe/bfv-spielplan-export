@@ -73,8 +73,9 @@ new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
 - `*_spiele_web.csv` — raw data per team
   (columns `Wettbewerb,Datum,Uhrzeit,Heim,Gast,Spielort,Link,Quelle`, UTF-8 with BOM)
 - `spielplan.html` — interactive overview: team filter, hide past games,
-  same-day highlighting, map/match links, URL preselect (`?team=<Name>`),
-  and `.ics` calendar export
+  same-day badge (always shown for days with multiple games), amber header
+  highlighting only when 2+ selected teams play on the same day, map/match
+  links, URL preselect (`?team=<Name>`), and `.ics` calendar export
 - `spielplan.pdf` — printable multi-page overview
 
 ## Tests
