@@ -41,6 +41,9 @@
   .tag.away { background:#6c75cd; }
   .link { color:#0d6efd; text-decoration:none; font-size:13px; }
   .link:hover { text-decoration:underline; }
+  .unfold-btn { background:transparent; border:1px solid #0d6efd; color:#0d6efd; border-radius:4px; padding:2px 8px; font-size:11px; cursor:pointer; margin-left:8px; font-weight:500; white-space:nowrap; }
+  .unfold-btn:hover { background:#e7f1ff; }
+  .unfold-btn.active { background:#0d6efd; color:#fff; }
   .export-btn { background:#0d6efd; color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:14px; cursor:pointer; font-weight:600; }
   .export-btn:hover { background:#0b5ed7; }
   .table-wrap { overflow-x:auto; }
@@ -115,6 +118,7 @@ $sections
   const teamChecks = Array.from(document.querySelectorAll('input[data-team]'));
   const clubTeamsSet = new Set(teamChecks.map(c => c.value));
   const sections = Array.from(document.querySelectorAll('.day'));
+  const unfoldedDays = new Set();
 
   function selectedTeams() {
     if (allCheck.checked) return null;
@@ -137,16 +141,19 @@ $sections
         return;
       }
       const trs = Array.from(section.querySelectorAll('tbody tr'));
+      const datum = section.dataset.datum;
+      const isUnfolded = unfoldedDays.has(datum);
       let visible = 0;
       let selectedTeamsOnDay = new Set();
       trs.forEach(tr => {
-        const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
+        const show = isUnfolded || sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
         tr.style.display = show ? '' : 'none';
-        if (show) {
-          visible++;
-          if (clubTeamsSet.has(tr.dataset.heim)) selectedTeamsOnDay.add(tr.dataset.heim);
-          if (clubTeamsSet.has(tr.dataset.gast)) selectedTeamsOnDay.add(tr.dataset.gast);
-        }
+      });
+      trs.forEach(tr => {
+        if (tr.style.display === 'none') return;
+        visible++;
+        if (clubTeamsSet.has(tr.dataset.heim)) selectedTeamsOnDay.add(tr.dataset.heim);
+        if (clubTeamsSet.has(tr.dataset.gast)) selectedTeamsOnDay.add(tr.dataset.gast);
       });
       const header = section.querySelector('.day-header');
       const badge = section.querySelector('.badge');
@@ -163,7 +170,7 @@ $sections
           badge.textContent = '⚠ ' + totalGames + ' Spiele';
           badge.style.display = '';
           const hasMultipleVisible = visible >= 2;
-          if (hasMultipleVisible) {
+          if (hasMultipleVisible && !isUnfolded) {
             const hiddenTeams = new Set();
             trs.forEach(tr => {
               const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
@@ -207,11 +214,37 @@ $sections
 
   teamChecks.forEach(c => c.addEventListener('change', () => {
     allCheck.checked = !teamChecks.some(x => x.checked);
+    unfoldedDays.clear();
+    document.querySelectorAll('.unfold-btn.active').forEach(b => {
+      b.classList.remove('active');
+      b.textContent = 'Alle Spiele';
+    });
     applyFilter();
   }));
   allCheck.addEventListener('change', () => {
     teamChecks.forEach(c => c.checked = allCheck.checked);
+    unfoldedDays.clear();
+    document.querySelectorAll('.unfold-btn.active').forEach(b => {
+      b.classList.remove('active');
+      b.textContent = 'Alle Spiele';
+    });
     applyFilter();
+  });
+
+  document.querySelectorAll('.unfold-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const datum = btn.dataset.datum;
+      if (unfoldedDays.has(datum)) {
+        unfoldedDays.delete(datum);
+        btn.classList.remove('active');
+        btn.textContent = 'Alle Spiele';
+      } else {
+        unfoldedDays.add(datum);
+        btn.classList.add('active');
+        btn.textContent = 'Weniger';
+      }
+      applyFilter();
+    });
   });
 
   const params = new URLSearchParams(window.location.search);

@@ -288,10 +288,13 @@ def render_day_section(datum: str, games: list[Game]) -> str:
     badge = f'<span class="badge"{badge_style}>⚠ {len(games)} Spiele</span>'
     header_cls = "day-header hot" if is_hot else "day-header"
     hidden_cls = ' class="hidden-teams" style="display:none"'
+    unfold_btn = ""
+    if is_hot:
+        unfold_btn = f'<button type="button" class="unfold-btn" data-datum="{esc(datum)}">Alle Spiele</button>'
     rows_html = "".join(render_game_row(g, is_hot) for g in games)
     return (
         f'<section class="day" data-datum="{esc(datum)}">'
-        f'<div class="{header_cls}"><span class="when">{esc(games[0]["wd"])}, {esc(datum)}</span><span>{badge}<span{hidden_cls}></span></span></div>'
+        f'<div class="{header_cls}"><span class="when">{esc(games[0]["wd"])}, {esc(datum)}</span><span>{badge}{unfold_btn}<span{hidden_cls}></span></span></div>'
         f'<div class="table-wrap"><table><colgroup>'
         f'<col style="width:4%"><col style="width:23%"><col style="width:3%"><col style="width:23%">'
         f'<col style="width:12%"><col style="width:24%"><col style="width:3%"><col style="width:8%">'
