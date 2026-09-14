@@ -1,7 +1,10 @@
-./spielplan.html
-./spielplan.pdf
-./vereinsspielplan.pdf
+/spielplan.html
+/spielplan.pdf
+/vereinsspielplan.pdf
+*_monthly.pdf
 *_spiele_web.csv
+/kapitane.json
+/roster.json
 __pycache__/
 *.pyc
 reports/
