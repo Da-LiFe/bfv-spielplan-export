@@ -6,10 +6,12 @@ files and generates an interactive HTML overview plus a PDF.
 ## Requirements
 
 - Python 3.10+
-- `reportlab` (PDF generation) and `pytest` (tests):
+- `reportlab` (PDF generation), `pytest` and `ruff` (tests/lint) — best run in a venv:
 
 ```bash
-pip install --user --break-system-packages reportlab pytest
+python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install reportlab pytest ruff
 ```
 
 ## Quick start
@@ -41,6 +43,17 @@ python3 fetch_bfv_spielplan.py --refresh --teams /path/to/teams.json
 
 # Generate HTML/PDF only, from existing CSVs
 python3 visualize_spiele.py
+
+# Single-team overview PDF with the next 4 upcoming games
+# (writes <slug>_monthly.pdf, e.g. tsv-gilching-argelsried-u13-2_monthly.pdf)
+python3 visualize_spiele.py --team "TSV Gilching/Argelsried u13-2"
+
+# Custom number of games / output path
+python3 visualize_spiele.py --team "TSV Gilching/Argelsried u13-2" --next 6 --out team.pdf
+
+# Kapitän (team lead) assignments
+python3 visualize_spiele.py --captains-assign   # fill new duty weeks round-robin
+python3 visualize_spiele.py --captains-check   # verify equal distribution (exit 1 if off)
 ```
 
 ### Team configuration (`teams.json`)
@@ -63,6 +76,56 @@ used for display in the HTML filter, tables, footer, PDF and `.ics` export:
 If `alias` is missing or empty, the original BFV team name is used. Opponent
 names are never aliased.
 
+### Team overview PDF
+
+`python3 visualize_spiele.py --team <Name/Alias>` generates a single, share-ready PDF
+(`<slug>_monthly.pdf`) with the next 4 upcoming games of one team — ideal for parents.
+The `--team` value matches a configured `alias` or the original BFV team name
+(case-insensitive); `--next N` changes the number of games, `--out` overrides the
+output path. Each game card shows weekday/date, time, home and away team, competition,
+location with a clickable map link, a home/away badge and the match link — it omits the
+"several games on the same day" (collision) highlighting. The PDF uses a portrait A4
+layout with one game card per game.
+
+### Kapitän (team lead) assignments
+
+Each team can assign one kid as "Kapitän" for the whole calendar week
+(Monday–Sunday) in which a game takes place. Both files are gitignored (they
+contain kid names):
+
+- `roster.json` — the kid per team that can be on duty:
+
+```json
+{
+  "teams": {
+    "TSV Gilching/Argelsried u13-2": ["Lena", "Max", "Noah"]
+  }
+}
+```
+
+- `kapitane.json` — the week→kid assignments (created/filled by
+  `--captains-assign`, individual weeks stay hand-editable):
+
+```json
+{
+  "assignments": {
+    "TSV Gilching/Argelsried u13-2": { "2026-39": "Lena", "2026-40": "Max" }
+  }
+}
+```
+
+- `--captains-assign` loads the current CSVs and fills any duty week that has an
+  upcoming game but no captain yet — round-robin, always giving the week to the
+  kid with the fewest appointments (fair by construction). Weeks you filled by
+  hand are never overwritten.
+- `--captains-check` counts, per team, how many weeks each kid is on duty (only
+  weeks with an actual game count) and reports `gleichmäßig` when no kid has more
+  than one duty week more than another. It flags missing assignments, kids not in
+  the roster and missing rosters, and exits with code 1 when anything is off.
+- The `--team` PDF then shows the captain on each game card:
+  `Kapitän der Woche · Lena · Mo 07.09. – So 13.09.` A configured team without an
+  assignment shows `Kapitän der Woche · folgt` until `--captains-assign` is run.
+
 ### Add a team
 
 Add the team's BFV URL (e.g. `https://www.bfv.de/mannschaften/.../<id>`) as a
@@ -77,12 +140,15 @@ new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
   highlighting only when 2+ selected teams play on the same day, map/match
   links, URL preselect (`?team=<Name>`), and `.ics` calendar export
 - `spielplan.pdf` — printable multi-page overview
+- `<slug>_monthly.pdf` — single-team overview of the next games (from `--team`)
+- `kapitane.json` / `roster.json` — Kapitän duty assignments and team rosters
+  (from `--captains-assign`, kid names stay local)
 
 ## Tests
 
 ```bash
-python3 -m pytest -v          # Python unit tests (59)
-node test/spielplan.test.mjs  # JS harness for the embedded filter/export code (needs Node >= 18)
+.venv/bin/python -m pytest -v   # Python unit tests (108)
+node test/spielplan.test.mjs    # JS harness for the embedded filter/export code (needs Node >= 18)
 ```
 
 ## Project layout
