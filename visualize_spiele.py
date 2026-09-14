@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import html as htmllib
 import json
@@ -18,8 +19,15 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
+import kapitane
 from config import (
     CLUB_MARKERS,
     CLUB_NAME,
@@ -97,6 +105,46 @@ def team_color(name: str) -> str:
     if not name:
         return "#888888"
     return PALETTE[sum(ord(c) for c in name) % len(PALETTE)]
+
+
+def slugify(name: str) -> str:
+    """Slugify a team name for filenames, mirroring the .ics export slug."""
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def resolve_team(sources: list[Source], arg: str) -> Source:
+    """Return the source whose alias or original BFV name matches ``arg``."""
+    lowered = arg.lower()
+    matches = [
+        s
+        for s in sources
+        if s["team"].lower() == lowered or (s.get("original") or "").lower() == lowered
+    ]
+    if not matches:
+        available = sorted({s["team"] for s in sources})
+        sys.exit(
+            f"Team '{arg}' nicht gefunden. Verfügbare Teams: {', '.join(available) or 'keine'}"
+        )
+    if len(matches) > 1:
+        sys.exit(
+            f"Team '{arg}' ist nicht eindeutig. Gemeint: "
+            f"{', '.join(m['team'] for m in matches)}"
+        )
+    return matches[0]
+
+
+def next_games_for_team(
+    games: list[Game], team: str, num: int, today: datetime | None = None
+) -> list[Game]:
+    """Return the next ``num`` upcoming games involving ``team``, sorted."""
+    today = today or datetime.now()
+    upcoming = [
+        g
+        for g in games
+        if (g["heim"] == team or g["gast"] == team) and g["date"].date() >= today.date()
+    ]
+    upcoming.sort(key=lambda g: (g["date"], g["time"] or "99:99"))
+    return upcoming[:num]
 
 
 def infer_team(
@@ -506,11 +554,450 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     ).build(story)
 
 
-def main() -> None:
-    """Load games, generate HTML and PDF overviews."""
+def _pill(text: str, bg: str, font: str, size: int = 8) -> Table:
+    """Render a small colored H/A pill."""
+    style = ParagraphStyle(
+        "pill",
+        fontName=font,
+        fontSize=size,
+        leading=size + 1,
+        textColor=colors.white,
+        alignment=1,
+        spaceBefore=0,
+        spaceAfter=0,
+    )
+    return Table(
+        [[Paragraph(text, style)]],
+        colWidths=[6 * mm],
+        rowHeights=[5.2 * mm],
+        style=[
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(bg)),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ],
+    )
+
+
+def _team_game_card(
+    g: Game,
+    font: str,
+    bold_font: str,
+    card_width: float,
+    captain_name: str | None = None,
+    captain_week_txt: str = "",
+) -> Table:
+    """Render one upcoming game as a friendly card for parents."""
+    accent = "#198754" if g["is_home"] else "#6c75cd"
+    accent_bar = 2.6 * mm
+    side_pad = 10 * mm
+    card_content = card_width - accent_bar
+    inner_w = card_content - 2 * side_pad
+    time_col = 42 * mm
+
+    date_style = ParagraphStyle(
+        "gd",
+        fontName=bold_font,
+        fontSize=13,
+        leading=16,
+        textColor=colors.HexColor("#222222"),
+        spaceAfter=0,
+    )
+    day_txt = f"{WEEKDAYS_DE[g['date'].weekday()]}, {g['datum']}"
+    time_txt = f"{g['time']} Uhr" if g["time"] else "Zeit folgt"
+    time_para = Paragraph(
+        esc(time_txt),
+        ParagraphStyle(
+            "gt", parent=date_style, alignment=2, textColor=colors.HexColor(accent)
+        ),
+    )
+
+    pill = _pill("H" if g["is_home"] else "A", accent, font)
+    match_para = Paragraph(
+        f'<font color="{g["home_color"]}"><b>{esc(g["heim"])}</b></font>'
+        f'<font color="#999999">&nbsp;–&nbsp;</font>'
+        f'<font color="{g["away_color"]}">{esc(g["gast"])}</font>',
+        ParagraphStyle(
+            "gm",
+            fontName=font,
+            fontSize=11,
+            leading=14,
+            textColor=colors.HexColor("#222222"),
+            spaceAfter=0,
+        ),
+    )
+    teams_sub = Table(
+        [[pill, match_para]],
+        colWidths=[8 * mm, inner_w - 8 * mm],
+        style=[("VALIGN", (0, 0), (-1, -1), "MIDDLE")],
+    )
+
+    place = g["spielort"].strip()
+    ort_txt = re.sub(r"\s*\|\s*", ", ", place).strip() if place else ""
+    line1_parts: list[str] = []
+    if g["wettbewerb"]:
+        line1_parts.append(
+            f'Wettbewerb: <font color="#333333"><b>{esc(g["wettbewerb"])}</b></font>'
+        )
+    if ort_txt:
+        map_href = maps_url(place)
+        if map_href:
+            line1_parts.append(
+                f'<link href="{esc(map_href)}"><font color="#0d6efd">Karte »</font></link>'
+            )
+    if g["link"]:
+        line1_parts.append(
+            f'<link href="{esc(g["link"])}"><font color="#0d6efd"><b>Spiel »</b></font></link>'
+        )
+    info1_para = Paragraph(
+        "&nbsp;·&nbsp;".join(line1_parts),
+        ParagraphStyle(
+            "gi",
+            fontName=font,
+            fontSize=9,
+            leading=13,
+            textColor=colors.HexColor("#666666"),
+            spaceAfter=0,
+        ),
+    )
+    info2_para = Paragraph(
+        f'Ort: <font color="#333333"><b>{esc(ort_txt)}</b></font>' if ort_txt else "",
+        ParagraphStyle(
+            "go",
+            fontName=font,
+            fontSize=9,
+            leading=13,
+            spaceAfter=0,
+            textColor=colors.HexColor("#444444"),
+        ),
+    )
+
+    inner_rows: list[list] = [
+        [Paragraph(esc(day_txt), date_style), time_para],
+        [teams_sub, ""],
+    ]
+    span_rows: list[int] = [1]
+    captain_row = None
+    if captain_name is not None:
+        cap_style = ParagraphStyle(
+            "cap",
+            fontName=bold_font,
+            fontSize=9,
+            leading=12,
+            spaceAfter=0,
+            textColor=colors.HexColor("#444444"),
+        )
+        cap_txt = captain_name or "folgt"
+        if captain_name and captain_week_txt:
+            cap_txt = f"{cap_txt} · {captain_week_txt}"
+        cap_para = Paragraph(
+            f'<font color="{accent}"><b>Kapitän der Woche</b></font> · {esc(cap_txt)}',
+            cap_style,
+        )
+        captain_row = len(inner_rows)
+        inner_rows.append([cap_para, ""])
+        span_rows.append(captain_row)
+    for para in (info1_para, info2_para):
+        inner_rows.append([para, ""])
+        span_rows.append(len(inner_rows) - 1)
+
+    cap_tint = "#e9f5ee" if g["is_home"] else "#efeef8"
+    inner_style: list = [
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+    ]
+    for row in span_rows:
+        inner_style.append(("SPAN", (0, row), (1, row)))
+    if captain_row is not None:
+        inner_style.append(
+            (
+                "BACKGROUND",
+                (0, captain_row),
+                (1, captain_row),
+                colors.HexColor(cap_tint),
+            )
+        )
+        inner_style.append(("TOPPADDING", (0, captain_row), (1, captain_row), 3))
+        inner_style.append(("BOTTOMPADDING", (0, captain_row), (1, captain_row), 4))
+    inner = Table(
+        inner_rows,
+        colWidths=[inner_w - time_col, time_col],
+        style=inner_style,
+    )
+    card = Table(
+        [["", inner]],
+        colWidths=[accent_bar, card_content],
+        style=[
+            ("BACKGROUND", (0, 0), (0, 0), colors.HexColor(accent)),
+            ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#ffffff")),
+            ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#dfe3ea")),
+            ("LEFTPADDING", (0, 0), (-1, -1), side_pad),
+            ("RIGHTPADDING", (0, 0), (-1, -1), side_pad),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING", (0, 0), (0, 0), 0),
+            ("RIGHTPADDING", (0, 0), (0, 0), 0),
+        ],
+    )
+    card.spaceAfter = 7
+    return card
+
+
+def build_team_pdf(
+    games: list[Game],
+    team: str,
+    sources: list[Source],
+    out_path: Path,
+    num: int,
+    captain_by_week: dict[str, str] | None = None,
+) -> None:
+    """Build a single-team PDF overview of the next ``num`` games.
+
+    ``captain_by_week`` maps a duty-week key (see ``kapitane.duty_week``) to a
+    kid's name; ``None`` hides the Kapitän row entirely. Weeks present in the
+    mapping show the name, missing keys fall back to "folgt".
+    """
+    font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
+    bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
+    styles = getSampleStyleSheet()
+
+    LEFT_MARGIN = 14 * mm
+    RIGHT_MARGIN = 14 * mm
+    CONTENT_WIDTH = A4[0] - LEFT_MARGIN - RIGHT_MARGIN
+
+    overline = ParagraphStyle(
+        "ov",
+        parent=styles["Normal"],
+        fontName=bold_font,
+        fontSize=9,
+        leading=11,
+        textColor=colors.HexColor("#0d6efd"),
+        spaceAfter=1,
+    )
+    title = ParagraphStyle(
+        "t",
+        parent=styles["Title"],
+        fontSize=20,
+        leading=24,
+        spaceAfter=1,
+        fontName=bold_font,
+    )
+    subtitle = ParagraphStyle(
+        "st",
+        parent=styles["Normal"],
+        textColor=colors.grey,
+        fontSize=10,
+        leading=13,
+        spaceAfter=0,
+        fontName=font,
+    )
+    legend = ParagraphStyle(
+        "lg",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#777777"),
+        spaceAfter=0,
+        fontName=font,
+    )
+    foot = ParagraphStyle(
+        "fo",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor("#999999"),
+        spaceBefore=4,
+        fontName=font,
+    )
+
+    source = next((s for s in sources if s["team"] == team), None)
+    first_datum = games[0]["datum"] if games else "?"
+    sub_txt = f"Nächste {num} Spiele ab {first_datum} · Stand: {german_now()}"
+
+    band = Table(
+        [
+            [
+                [
+                    Paragraph("NÄCHSTE SPIELE", overline),
+                    Paragraph(esc(team), title),
+                    Paragraph(esc(sub_txt), subtitle),
+                ]
+            ]
+        ],
+        colWidths=[CONTENT_WIDTH],
+        style=[
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eef4fb")),
+            ("BOX", (0, 0), (-1, -1), 1.2, colors.HexColor("#cfe0f2")),
+            ("TOPPADDING", (0, 0), (-1, -1), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ],
+    )
+
+    legend_txt = Paragraph("Karte- und Spiel-Links sind im PDF anklickbar.", legend)
+    legend_row = Table(
+        [
+            [
+                _pill("H", "#198754", font, 7),
+                Paragraph("Heimspiel", legend),
+                _pill("A", "#6c75cd", font, 7),
+                Paragraph("Auswärtsspiel", legend),
+                legend_txt,
+            ]
+        ],
+        colWidths=[
+            6 * mm,
+            24 * mm,
+            6 * mm,
+            28 * mm,
+            CONTENT_WIDTH - 64 * mm,
+        ],
+        style=[("VALIGN", (0, 0), (-1, -1), "MIDDLE")],
+    )
+
+    story = [band, Spacer(1, 5), legend_row, Spacer(1, 7)]
+
+    for g in games:
+        if captain_by_week is None:
+            story.append(_team_game_card(g, font, bold_font, CONTENT_WIDTH))
+            continue
+        wk = kapitane.duty_week(g["date"].date())
+        captain = captain_by_week.get(wk, "")
+        week_txt = kapitane.week_range(wk) if wk in captain_by_week else ""
+        story.append(
+            _team_game_card(g, font, bold_font, CONTENT_WIDTH, captain, week_txt)
+        )
+
+    if source and source.get("url"):
+        foot_txt = (
+            f"Erstellt am {esc(german_now())}. Datenquelle: "
+            f'<link href="{esc(source["url"])}"><font color="#0d6efd">{esc(team)}</font></link>'
+        )
+    else:
+        foot_txt = f"Erstellt am {esc(german_now())}. Datenquelle: {esc(team)}"
+    story.append(Paragraph(foot_txt, foot))
+
+    SimpleDocTemplate(
+        str(out_path),
+        pagesize=A4,
+        leftMargin=LEFT_MARGIN,
+        rightMargin=RIGHT_MARGIN,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+        title=f"Nächste Spiele – {team}",
+    ).build(story)
+
+
+def handle_captains(
+    games: list[Game], sources: list[Source], assign: bool, check: bool
+) -> None:
+    """Fill and/or verify the Kapitän assignments from roster.json/kapitane.json."""
+    cfg_path = SCRIPT_DIR / kapitane.CONFIG_NAME
+    roster_path = SCRIPT_DIR / kapitane.ROSTER_NAME
+    cfg = kapitane.load_all(cfg_path, roster_path)
+    weeks = kapitane.teams_duty_weeks(games, sources)
+    if assign:
+        warnings = kapitane.ensure_assignments(cfg, weeks)
+        kapitane.save_config(cfg, cfg_path)
+        if cfg["teams"]:
+            kapitane.save_roster(cfg["teams"], roster_path)
+        print(f"{kapitane.ROSTER_NAME} / {kapitane.CONFIG_NAME} aktualisiert.")
+        for warning in warnings:
+            print(f"Warnung: {warning}", file=sys.stderr)
+        print()
+    result = kapitane.check_distribution(cfg, weeks)
+    if check:
+        kapitane.run_check(result, cfg_path)
+    for line in result.lines:
+        print(line)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Load games, generate HTML/PDF overviews, or a single-team PDF."""
+    ap = argparse.ArgumentParser(
+        description="Generate HTML/PDF overviews from *_spiele_web.csv files."
+    )
+    ap.add_argument(
+        "--team",
+        default=None,
+        help="Generate a single-team PDF with only the next upcoming games "
+        "(matches a team alias or original BFV name)",
+    )
+    ap.add_argument(
+        "--next",
+        type=int,
+        default=4,
+        help="Number of upcoming games for --team (default: 4)",
+    )
+    ap.add_argument(
+        "--out",
+        default=None,
+        help="Output path for the --team PDF (default: <slug>_monthly.pdf)",
+    )
+    ap.add_argument(
+        "--captains-assign",
+        action="store_true",
+        help="Extend kapitane.json with the duty weeks of newly fetched games "
+        "(round-robin, fair by construction)",
+    )
+    ap.add_argument(
+        "--captains-check",
+        action="store_true",
+        help="Verify the Kapitän assignments are equally distributed and exit "
+        "non-zero otherwise",
+    )
+    args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+
     games, club_teams, sources = load_games()
     if not games:
         sys.exit("Keine *_spiele_web.csv Dateien gefunden.")
+
+    if args.captains_assign or args.captains_check:
+        handle_captains(games, sources, args.captains_assign, args.captains_check)
+        return
+
+    if args.team:
+        if args.next <= 0:
+            sys.exit("--next must be a positive number of games.")
+        source = resolve_team(sources, args.team)
+        team = source["team"]
+        next_games = next_games_for_team(games, team, args.next)
+        if not next_games:
+            sys.exit(f"Keine bevorstehenden Spiele für '{team}' gefunden.")
+        out = (
+            Path(args.out) if args.out else SCRIPT_DIR / f"{slugify(team)}_monthly.pdf"
+        )
+        cfg = kapitane.load_all(
+            SCRIPT_DIR / kapitane.CONFIG_NAME, SCRIPT_DIR / kapitane.ROSTER_NAME
+        )
+        captain_by_week = (
+            cfg["assignments"].get(team, {})
+            if team in cfg["teams"] or team in cfg["assignments"]
+            else None
+        )
+        build_team_pdf(next_games, team, sources, out, len(next_games), captain_by_week)
+        print(f"{len(next_games)} kommende Spiele für {team}")
+        print(f"PDF:  {out}")
+        if captain_by_week is not None:
+            missing = [
+                game
+                for game in next_games
+                if not captain_by_week.get(kapitane.duty_week(game["date"].date()), "")
+            ]
+            if missing:
+                rng = ", ".join(
+                    kapitane.week_range(kapitane.duty_week(g["date"].date()))
+                    for g in missing
+                )
+                print(
+                    f"Hinweis: Kapitän offen für {rng} – "
+                    "'--captains-assign' führt die Zuteilung durch.",
+                    file=sys.stderr,
+                )
+        return
+
     days = group_by_day(games)
     html_path = SCRIPT_DIR / "spielplan.html"
     pdf_path = SCRIPT_DIR / "spielplan.pdf"

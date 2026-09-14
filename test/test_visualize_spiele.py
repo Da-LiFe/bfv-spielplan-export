@@ -1,9 +1,10 @@
 import csv
 import json
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 import pytest
+from pdfminer.high_level import extract_text
 
 import visualize_spiele as vis
 
@@ -562,7 +563,7 @@ def test_build_pdf(tmp_path):
 def test_main(monkeypatch, tmp_path, capsys):
     write_fixtures(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
-    vis.main()
+    vis.main([])
     assert (tmp_path / "spielplan.html").exists()
     assert (tmp_path / "spielplan.pdf").exists()
     out = capsys.readouterr().out
@@ -574,4 +575,354 @@ def test_main(monkeypatch, tmp_path, capsys):
 def test_main_no_csvs(monkeypatch, tmp_path):
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
     with pytest.raises(SystemExit, match="Keine .*_spiele_web.csv Dateien gefunden"):
-        vis.main()
+        vis.main([])
+
+
+# ------------------------------------------------------ team PDF helpers ()
+
+
+def test_slugify():
+    assert vis.slugify("") == ""
+    assert (
+        vis.slugify("TSV Gilching/Argelsried u13-2") == "tsv-gilching-argelsried-u13-2"
+    )
+    assert (
+        vis.slugify("TSV Gilching/Argelsried (7) u15w2")
+        == "tsv-gilching-argelsried-7-u15w2"
+    )
+    assert vis.slugify("  A b C  ") == "a-b-c"
+
+
+def make_relative_game(days, time, heim, gast, **kw):
+    d = date.today() + timedelta(days=days)
+    return make_game(d.strftime(vis.CSV_DATE_FORMAT), time, heim, gast, **kw)
+
+
+def test_next_games_for_team_filters_sorts_and_caps():
+    team = "TSV Gilching/Argelsried U15"
+    past = make_relative_game(-2, "09:00", team, "FC Alt")
+    same_day_later = make_relative_game(1, "12:00", "FC Fremd", team)
+    upcoming_3d = make_relative_game(3, "10:00", team, "FC B")
+    same_day_earlier = make_relative_game(1, "11:00", team, "FC A")
+    other_team = make_relative_game(5, "15:00", "FC Fremd 2", "FC Anderer")
+    games = [past, same_day_later, upcoming_3d, same_day_earlier, other_team]
+
+    result = vis.next_games_for_team(games, team, 4)
+    assert result == [same_day_earlier, same_day_later, upcoming_3d]
+
+    capped = vis.next_games_for_team(games, team, 2)
+    assert capped == [same_day_earlier, same_day_later]
+
+
+def test_next_games_for_team_no_upcoming():
+    team = "TSV Gilching/Argelsried U15"
+    games = [make_relative_game(-2, "09:00", team, "FC Alt")]
+    assert vis.next_games_for_team(games, team, 4) == []
+
+
+def test_resolve_team_by_alias_and_original():
+    sources = [
+        {"file": "a.csv", "team": "Alias A", "url": "u1", "original": "BFV A"},
+        {"file": "b.csv", "team": "Alias B", "url": "u2", "original": "BFV B"},
+    ]
+    assert vis.resolve_team(sources, "alias a")["team"] == "Alias A"
+    assert vis.resolve_team(sources, "bfv b")["team"] == "Alias B"
+
+
+def test_resolve_team_unknown():
+    sources = [{"file": "a.csv", "team": "Alias A", "url": "u1", "original": "BFV A"}]
+    with pytest.raises(SystemExit, match="nicht gefunden"):
+        vis.resolve_team(sources, "Nope")
+
+
+def test_resolve_team_ambiguous():
+    sources = [
+        {"file": "a.csv", "team": "A", "url": "u1", "original": "X"},
+        {"file": "b.csv", "team": "A", "url": "u2", "original": "Y"},
+    ]
+    with pytest.raises(SystemExit, match="nicht eindeutig"):
+        vis.resolve_team(sources, "a")
+
+
+def test_build_team_pdf(tmp_path):
+    out = tmp_path / "team_monthly.pdf"
+    team = "TSV Gilching/Argelsried U15"
+    games = [
+        make_relative_game(1, "10:00", team, "FC A"),
+        make_relative_game(3, "14:00", "FC B", team),
+    ]
+    sources = [
+        {
+            "file": "team_x_spiele_web.csv",
+            "team": team,
+            "url": "https://bfv/x",
+            "original": team,
+        }
+    ]
+    vis.build_team_pdf(games, team, sources, out, len(games))
+    assert out.exists()
+    assert out.read_bytes()[:4] == b"%PDF"
+
+
+def test_main_team_pdf(monkeypatch, tmp_path, capsys):
+    team = "TSV Gilching/Argelsried U15"
+    t0 = date.today()
+    write_csv(
+        tmp_path / "team_x_spiele_web.csv",
+        [
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": (t0 - timedelta(days=2)).strftime(vis.CSV_DATE_FORMAT),
+                "Uhrzeit": "09:00",
+                "Heim": team,
+                "Gast": "FC Alt",
+                "Spielort": "Sportpark",
+                "Link": "",
+                "Quelle": "https://bfv/x",
+            },
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": (t0 + timedelta(days=1)).strftime(vis.CSV_DATE_FORMAT),
+                "Uhrzeit": "10:00",
+                "Heim": team,
+                "Gast": "FC A",
+                "Spielort": "Sportpark",
+                "Link": "",
+                "Quelle": "https://bfv/x",
+            },
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": (t0 + timedelta(days=3)).strftime(vis.CSV_DATE_FORMAT),
+                "Uhrzeit": "11:00",
+                "Heim": "FC B",
+                "Gast": team,
+                "Spielort": "Sportpark",
+                "Link": "",
+                "Quelle": "https://bfv/x",
+            },
+        ],
+    )
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    vis.main(["--team", team, "--next", "2"])
+    out = capsys.readouterr().out
+    assert "tsv-gilching-argelsried-u15_monthly.pdf" in out
+    assert (tmp_path / "tsv-gilching-argelsried-u15_monthly.pdf").exists()
+    assert not (tmp_path / "spielplan.html").exists()
+    assert not (tmp_path / "spielplan.pdf").exists()
+
+
+def test_main_team_out_override(monkeypatch, tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    t0 = date.today()
+    write_csv(
+        tmp_path / "team_x_spiele_web.csv",
+        [
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": (t0 + timedelta(days=1)).strftime(vis.CSV_DATE_FORMAT),
+                "Uhrzeit": "10:00",
+                "Heim": team,
+                "Gast": "FC A",
+                "Spielort": "Sportpark",
+                "Link": "",
+                "Quelle": "https://bfv/x",
+            }
+        ],
+    )
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    custom = tmp_path / "custom.pdf"
+    vis.main(["--team", team, "--out", str(custom)])
+    assert custom.exists()
+    assert custom.read_bytes()[:4] == b"%PDF"
+
+
+def test_main_team_unknown(monkeypatch, tmp_path):
+    write_fixtures(tmp_path)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    with pytest.raises(SystemExit, match="nicht gefunden"):
+        vis.main(["--team", "Nope"])
+
+
+def test_main_team_no_upcoming(monkeypatch, tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    t0 = date.today()
+    write_csv(
+        tmp_path / "team_x_spiele_web.csv",
+        [
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": (t0 - timedelta(days=2)).strftime(vis.CSV_DATE_FORMAT),
+                "Uhrzeit": "09:00",
+                "Heim": team,
+                "Gast": "FC Alt",
+                "Spielort": "Sportpark",
+                "Link": "",
+                "Quelle": "https://bfv/x",
+            }
+        ],
+    )
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    with pytest.raises(SystemExit, match="Keine bevorstehenden Spiele"):
+        vis.main(["--team", team])
+
+
+def test_main_team_next_zero(monkeypatch, tmp_path):
+    write_fixtures(tmp_path)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    with pytest.raises(SystemExit, match="must be a positive"):
+        vis.main(["--team", "TSV Gilching/Argelsried U15", "--next", "0"])
+
+
+# ------------------------------------------------------------------- Kapitän
+
+
+def helper_write_captain_csv(tmp_path, team, days, gast, idx=0):
+    t0 = date.today()
+    write_csv(
+        tmp_path / f"capt_{slug_team(team)}_{idx}_spiele_web.csv",
+        [
+            {
+                "Wettbewerb": "U15 Kreis",
+                "Datum": (t0 + timedelta(days=days)).strftime(vis.CSV_DATE_FORMAT),
+                "Uhrzeit": "09:00",
+                "Heim": team,
+                "Gast": gast,
+                "Spielort": "Sportpark",
+                "Link": "",
+                "Quelle": "https://bfv/x",
+            }
+        ],
+    )
+
+
+def slug_team(team):
+    return re.sub(r"[^a-z0-9]+", "-", team.lower()).strip("-")
+
+
+def helper_write_captain_config(tmp_path, team, assignments=None):
+    (tmp_path / "roster.json").write_text(
+        json.dumps({"teams": {team: ["Lena", "Max", "Noah"]}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (tmp_path / "kapitane.json").write_text(
+        json.dumps({"assignments": {team: assignments or {}}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def test_build_team_pdf_with_captain_row(tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    games = [
+        make_relative_game(1, "10:00", team, "FC A"),
+        make_relative_game(9, "14:00", "FC B", team),
+    ]
+    sources = [
+        {
+            "file": "team_x_spiele_web.csv",
+            "team": team,
+            "url": "https://bfv/x",
+            "original": team,
+        }
+    ]
+    w1 = vis.kapitane.duty_week(games[0]["date"].date())
+    w2 = vis.kapitane.duty_week(games[1]["date"].date())
+    out = tmp_path / "with_captain.pdf"
+    vis.build_team_pdf(games, team, sources, out, len(games), {w1: "Lena", w2: "Max"})
+    text = extract_text(str(out))
+    assert "Kapitän" in text
+    assert "Lena" in text
+    assert "Max" in text
+    assert vis.kapitane.week_range(w1) in text
+
+
+def test_build_team_pdf_without_captain_config(tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    games = [make_relative_game(1, "10:00", team, "FC A")]
+    sources = [
+        {
+            "file": "team_x_spiele_web.csv",
+            "team": team,
+            "url": "https://bfv/x",
+            "original": team,
+        }
+    ]
+    out = tmp_path / "no_captain.pdf"
+    vis.build_team_pdf(games, team, sources, out, len(games))
+    assert "Kapitän" not in extract_text(str(out))
+
+
+def test_build_team_pdf_captain_folgt_placeholder(tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    games = [make_relative_game(1, "10:00", team, "FC A")]
+    sources = [
+        {
+            "file": "team_x_spiele_web.csv",
+            "team": team,
+            "url": "https://bfv/x",
+            "original": team,
+        }
+    ]
+    out = tmp_path / "folgt.pdf"
+    vis.build_team_pdf(games, team, sources, out, len(games), {})
+    text = extract_text(str(out))
+    assert "Kapitän" in text
+    assert "folgt" in text
+
+
+def test_main_captains_assign(monkeypatch, tmp_path, capsys):
+    team = "TSV Gilching/Argelsried U15"
+    helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    helper_write_captain_config(tmp_path, team)
+    vis.main(["--captains-assign"])
+    cfg = json.loads((tmp_path / "kapitane.json").read_text(encoding="utf-8"))
+    roster = json.loads((tmp_path / "roster.json").read_text(encoding="utf-8"))
+    assigned = cfg["assignments"][team]
+    assert len(assigned) == 1
+    (kid,) = assigned.values()
+    assert kid in roster["teams"][team]
+    out = capsys.readouterr().out
+    assert "Kapitän-Verteilung" in out
+    assert "gleichmäßig" in out
+
+
+def test_main_captains_check_balanced(monkeypatch, tmp_path, capsys):
+    team = "TSV Gilching/Argelsried U15"
+    helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
+    helper_write_captain_csv(tmp_path, team, days=10, gast="FC B")
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    w1 = vis.kapitane.duty_week(date.today() + timedelta(days=3))
+    w2 = vis.kapitane.duty_week(date.today() + timedelta(days=10))
+    helper_write_captain_config(tmp_path, team, assignments={w1: "Lena", w2: "Max"})
+    vis.main(["--captains-check"])
+    out = capsys.readouterr().out
+    assert "gleichmäßig" in out
+
+
+def test_main_captains_check_unbalanced(monkeypatch, tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    for i, days in enumerate((2, 9, 16)):
+        helper_write_captain_csv(tmp_path, team, days=days, gast=f"FC {i}", idx=i)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    weeks = {
+        vis.kapitane.duty_week(date.today() + timedelta(days=d)) for d in (2, 9, 16)
+    }
+    helper_write_captain_config(
+        tmp_path, team, assignments={w: "Lena" for w in sorted(weeks)}
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        vis.main(["--captains-check"])
+    assert exc_info.value.code == 1
+
+
+def test_main_team_pdf_with_captain(monkeypatch, tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    w1 = vis.kapitane.duty_week(date.today() + timedelta(days=3))
+    helper_write_captain_config(tmp_path, team, assignments={w1: "Lena"})
+    vis.main(["--team", team])
+    out = tmp_path / f"{slug_team(team)}_monthly.pdf"
+    assert out.exists()
+    assert "Kapitän" in extract_text(str(out))
+    assert "Lena" in extract_text(str(out))
