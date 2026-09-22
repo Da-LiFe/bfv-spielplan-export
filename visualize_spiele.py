@@ -27,6 +27,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+import anwesenheit
 import kapitane
 from config import (
     CLUB_MARKERS,
@@ -914,6 +915,27 @@ def handle_captains(
         print(line)
 
 
+def handle_anwesenheit(team: str | None, out: str | None) -> None:
+    """Render the training attendance evaluation PDF from anwesenheit.json."""
+    data = anwesenheit.load_data(SCRIPT_DIR / anwesenheit.ANWESENHEIT_NAME)
+    sessions = data["sessions"]
+    if team:
+        teams = sorted({s["team"] for s in sessions})
+        if team not in teams:
+            sys.exit(
+                f"Team '{team}' nicht gefunden. Verfügbare Teams: "
+                f"{', '.join(teams) or 'keine'}"
+            )
+        sessions = [s for s in sessions if s["team"] == team]
+        pdf_name = f"{slugify(team)}_anwesenheit.pdf"
+    else:
+        pdf_name = anwesenheit.PDF_NAME
+    out_path = Path(out) if out else SCRIPT_DIR / pdf_name
+    teams_rendered = anwesenheit.build_anwesenheit_pdf(sessions, out_path)
+    print(f"{len(sessions)} Trainingstermine aus {len(teams_rendered)} Team(s)")
+    print(f"PDF:  {out_path}")
+
+
 def main(argv: list[str] | None = None) -> None:
     """Load games, generate HTML/PDF overviews, or a single-team PDF."""
     ap = argparse.ArgumentParser(
@@ -922,8 +944,9 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument(
         "--team",
         default=None,
-        help="Generate a single-team PDF with only the next upcoming games "
-        "(matches a team alias or original BFV name)",
+        help="Generate a single-team PDF with only the next upcoming games, or "
+        "filter --anwesenheit to one team (matches a team alias or original "
+        "BFV name)",
     )
     ap.add_argument(
         "--next",
@@ -934,7 +957,14 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument(
         "--out",
         default=None,
-        help="Output path for the --team PDF (default: <slug>_monthly.pdf)",
+        help="Output path for the --team or --anwesenheit PDF (default: "
+        "<slug>_monthly.pdf / anwesenheit.pdf)",
+    )
+    ap.add_argument(
+        "--anwesenheit",
+        action="store_true",
+        help="Render the training attendance evaluation PDF from "
+        "anwesenheit.json (no game CSVs needed)",
     )
     ap.add_argument(
         "--captains-assign",
@@ -949,6 +979,10 @@ def main(argv: list[str] | None = None) -> None:
         "non-zero otherwise",
     )
     args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+
+    if args.anwesenheit:
+        handle_anwesenheit(args.team, args.out)
+        return
 
     games, club_teams, sources = load_games()
     if not games:

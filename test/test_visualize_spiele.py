@@ -926,3 +926,74 @@ def test_main_team_pdf_with_captain(monkeypatch, tmp_path):
     assert out.exists()
     assert "Kapitän" in extract_text(str(out))
     assert "Lena" in extract_text(str(out))
+
+
+def helper_write_anwesenheit(tmp_path):
+    team = "TSV Gilching/Argelsried U15"
+    (tmp_path / "anwesenheit.json").write_text(
+        json.dumps(
+            {
+                "sessions": [
+                    {
+                        "date": "2026-09-07",
+                        "team": team,
+                        "values": {"Lena": "P", "Max": "S", "Noah": "N"},
+                    },
+                    {
+                        "date": "2026-09-14",
+                        "team": "TSV Gilching/Argelsried U17",
+                        "values": {"Emma": "P", "Paul": "N"},
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return team
+
+
+def test_main_anwesenheit(monkeypatch, tmp_path, capsys):
+    team = helper_write_anwesenheit(tmp_path)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    vis.main(["--anwesenheit"])
+    out = tmp_path / vis.anwesenheit.PDF_NAME
+    assert out.exists()
+    text = extract_text(str(out))
+    assert team in text
+    assert "TSV Gilching/Argelsried U17" in text
+    assert "Lena" in text
+    assert capsys.readouterr().out.count("Team(s)") == 1
+
+
+def test_main_anwesenheit_team_filter(monkeypatch, tmp_path, capsys):
+    team = helper_write_anwesenheit(tmp_path)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    vis.main(["--anwesenheit", "--team", team])
+    out = tmp_path / f"{slug_team(team)}_anwesenheit.pdf"
+    assert out.exists()
+    text = extract_text(str(out))
+    assert team in text
+    assert "U17" not in text
+
+
+def test_main_anwesenheit_out_override(monkeypatch, tmp_path):
+    helper_write_anwesenheit(tmp_path)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    out = tmp_path / "custom.pdf"
+    vis.main(["--anwesenheit", "--out", str(out)])
+    assert out.exists()
+
+
+def test_main_anwesenheit_unknown_team(monkeypatch, tmp_path):
+    helper_write_anwesenheit(tmp_path)
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    with pytest.raises(SystemExit, match="nicht gefunden"):
+        vis.main(["--anwesenheit", "--team", "Kein Team"])
+
+
+def test_main_anwesenheit_empty_data(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    vis.main(["--anwesenheit"])
+    out = tmp_path / vis.anwesenheit.PDF_NAME
+    assert out.exists()
+    assert "Keine Anwesenheitsdaten" in extract_text(str(out))
