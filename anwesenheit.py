@@ -262,8 +262,15 @@ def _columns(combined: bool) -> tuple[list[str], list[float]]:
     """Return the summary table headers and column widths (sum = 182 mm)."""
     if combined:
         return (
-            ["Spieler", "Termine", "P", "S+A", "N", "Quote P"],
-            [60 * mm, 22 * mm, 14 * mm, 22 * mm, 14 * mm, 50 * mm],
+            [
+                "Spieler",
+                "Termine",
+                "P",
+                "A",
+                "N",
+                "Quote P",
+            ],
+            [60 * mm, 22 * mm, 30 * mm, 30 * mm, 14 * mm, 26 * mm],
         )
     return (
         ["Spieler", "Termine", "P", "S", "A", "N", "Quote P", "Quote P+S"],
@@ -477,7 +484,11 @@ def build_anwesenheit_pdf(
         table.setStyle(TableStyle(style))
         story.append(table)
 
-    legend = " · ".join(f"{code} = {label}" for code, label in STATUS_LABELS.items())
+    legend = " · ".join(
+        f"{code} = {label}"
+        for code, label in STATUS_LABELS.items()
+        if not (combined and code == "S")
+    )
     story.append(Paragraph(f"Legende: {legend}", footnote))
     story.append(
         Paragraph(

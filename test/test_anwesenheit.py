@@ -278,21 +278,8 @@ def test_columns_and_values_variants():
         "Quote P+S",
     ]
     headers, widths = anwesenheit._columns(True)
-    assert headers == ["Spieler", "Termine", "P", "S+A", "N", "Quote P"]
+    assert headers == ["Spieler", "Termine", "P", "A", "N", "Quote P"]
     assert sum(widths) == pytest.approx(182 * mm)
-    stats = [
-        PlayerStats(name="Lena", sessions=2, p=2, n=0),
-        PlayerStats(name="Max", sessions=2, p=0, s=1, n=1),
-    ]
-    assert anwesenheit._player_values(stats[1], True) == (
-        "Max",
-        2,
-        0,
-        1,
-        1,
-        "0 %",
-    )
-    assert len(anwesenheit._player_values(stats[0], False)) == 8
 
 
 def test_totals_aggregates():
@@ -311,9 +298,12 @@ def test_build_anwesenheit_pdf_combined(tmp_path):
     teams = anwesenheit.build_anwesenheit_pdf(make_sessions(), out, combined=True)
     assert teams == [TG, TG2]
     text = extract_text(str(out))
-    assert "S+A" in text
+    assert "S+A" not in text
+    assert "A" in text  # merged column now reads just A
     assert "Quote P" in text
     assert "Quote P+S" not in text
-    assert "S" in text and "A" in text  # legend still mentions sick/absent
+    assert "krank" not in text  # sick is completely hidden in combined mode
+    assert "S = krank" not in text
+    assert "A = abwesend" in text  # legend: only P/A/N, no sick
     assert "Summe" in text
     assert "100 %" in text  # Lena: 2/2 present

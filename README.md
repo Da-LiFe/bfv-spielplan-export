@@ -153,7 +153,7 @@ BFV team app and maintain it by hand:
   python3 visualize_spiele.py --anwesenheit
   # only one team / custom output:
   python3 visualize_spiele.py --anwesenheit --team "TSV Gilching/Argelsried u13-2" --out team.pdf
-  # combined view: merge S+A into one column and show only the Quote P rate:
+  # combined view: fold sickness into the A column, show only the Quote P rate:
   python3 visualize_spiele.py --anwesenheit --kombiniert
   ```
 - The A4 PDF shows one table per team: `Spieler | Termine | P | S | A | N |
@@ -161,12 +161,11 @@ BFV team app and maintain it by hand:
   `Quote P+S` = `(P+S) / total` — `N` counts toward the total, so missing
   feedback lowers the quota. Dates are accepted as `2026-09-21` or `21.09.2026`,
   unknown status letters are reported and counted as `N`.
-- With `--kombiniert` the table merges sick and absent into one `S+A` column
-  and shows only `Quote P` (= `P / total`): when a kid either has no feedback
-  (`N`) or is not available (`S`/`A`), only their presence quota is reported —
-  if you prefer a single headline number per kid, this variant is the compact
-  one. The merged counts still appear as raw numbers, and `S+A` in a row always
-  means "krank oder abwesend".
+- With `--kombiniert` the table folds sickness into the `A` column and shows
+  only `Quote P` (= `P / total`): sick is treated as absent, and the sick
+  status is not mentioned at all — the legend lists just `P`, `A` and `N`. If
+  you prefer a single headline number per kidaches, this variant is the compact
+  one.
 
 ### Add a team
 
