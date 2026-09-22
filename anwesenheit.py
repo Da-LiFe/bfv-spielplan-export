@@ -490,12 +490,7 @@ def build_anwesenheit_pdf(
         if not (combined and code == "S")
     )
     story.append(Paragraph(f"Legende: {legend}", footnote))
-    story.append(
-        Paragraph(
-            f"Quoten beziehen alle Rückmeldungen ein (ohne N ≤ 0). {esc(german_now())}",
-            footnote,
-        )
-    )
+    story.append(Paragraph(esc(german_now()), footnote))
 
     SimpleDocTemplate(
         str(out_path),
