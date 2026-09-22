@@ -298,9 +298,7 @@ def _make_row(
     values: tuple[Any, ...], first_style: ParagraphStyle, cell_style: ParagraphStyle
 ) -> list[Paragraph]:
     """Assemble one table row from a values tuple."""
-    return [_cell(values[0], first_style)] + [
-        _cell(v, cell_style) for v in values[1:]
-    ]
+    return [_cell(values[0], first_style)] + [_cell(v, cell_style) for v in values[1:]]
 
 
 def _totals(stats: list[PlayerStats]) -> PlayerStats:
