@@ -915,7 +915,7 @@ def handle_captains(
         print(line)
 
 
-def handle_anwesenheit(team: str | None, out: str | None) -> None:
+def handle_anwesenheit(team: str | None, out: str | None, combined: bool) -> None:
     """Render the training attendance evaluation PDF from anwesenheit.json."""
     data = anwesenheit.load_data(SCRIPT_DIR / anwesenheit.ANWESENHEIT_NAME)
     sessions = data["sessions"]
@@ -931,7 +931,7 @@ def handle_anwesenheit(team: str | None, out: str | None) -> None:
     else:
         pdf_name = anwesenheit.PDF_NAME
     out_path = Path(out) if out else SCRIPT_DIR / pdf_name
-    teams_rendered = anwesenheit.build_anwesenheit_pdf(sessions, out_path)
+    teams_rendered = anwesenheit.build_anwesenheit_pdf(sessions, out_path, combined)
     print(f"{len(sessions)} Trainingstermine aus {len(teams_rendered)} Team(s)")
     print(f"PDF:  {out_path}")
 
@@ -967,6 +967,12 @@ def main(argv: list[str] | None = None) -> None:
         "anwesenheit.json (no game CSVs needed)",
     )
     ap.add_argument(
+        "--kombiniert",
+        action="store_true",
+        help="With --anwesenheit: merge sick and absent (S+A) into one column "
+        "and show only the Quote P percentage",
+    )
+    ap.add_argument(
         "--captains-assign",
         action="store_true",
         help="Extend kapitane.json with the duty weeks of newly fetched games "
@@ -981,7 +987,7 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(sys.argv[1:] if argv is None else argv)
 
     if args.anwesenheit:
-        handle_anwesenheit(args.team, args.out)
+        handle_anwesenheit(args.team, args.out, args.kombiniert)
         return
 
     games, club_teams, sources = load_games()

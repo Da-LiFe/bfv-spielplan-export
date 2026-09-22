@@ -258,8 +258,71 @@ def _cell(text: Any, style: ParagraphStyle) -> Paragraph:
     return Paragraph(esc(text), style)
 
 
-def build_anwesenheit_pdf(sessions: list[dict[str, Any]], out_path: Path) -> list[str]:
-    """Render the attendance evaluation PDF; return the rendered team names."""
+def _columns(combined: bool) -> tuple[list[str], list[float]]:
+    """Return the summary table headers and column widths (sum = 182 mm)."""
+    if combined:
+        return (
+            ["Spieler", "Termine", "P", "S+A", "N", "Quote P"],
+            [60 * mm, 22 * mm, 14 * mm, 22 * mm, 14 * mm, 50 * mm],
+        )
+    return (
+        ["Spieler", "Termine", "P", "S", "A", "N", "Quote P", "Quote P+S"],
+        [60 * mm, 22 * mm, 14 * mm, 14 * mm, 14 * mm, 14 * mm, 22 * mm, 22 * mm],
+    )
+
+
+def _player_values(ps: PlayerStats, combined: bool) -> tuple[Any, ...]:
+    """Return the row cells for one player (or the totals row)."""
+    if combined:
+        return (
+            ps.name,
+            ps.sessions,
+            ps.p,
+            ps.s + ps.a,
+            ps.n,
+            _percent(ps.presence_rate),
+        )
+    return (
+        ps.name,
+        ps.sessions,
+        ps.p,
+        ps.s,
+        ps.a,
+        ps.n,
+        _percent(ps.presence_rate),
+        _percent(ps.fit_rate),
+    )
+
+
+def _make_row(
+    values: tuple[Any, ...], first_style: ParagraphStyle, cell_style: ParagraphStyle
+) -> list[Paragraph]:
+    """Assemble one table row from a values tuple."""
+    return [_cell(values[0], first_style)] + [
+        _cell(v, cell_style) for v in values[1:]
+    ]
+
+
+def _totals(stats: list[PlayerStats]) -> PlayerStats:
+    """Aggregate the per-player statistics into a single totals row."""
+    return PlayerStats(
+        name="Summe",
+        sessions=sum(ps.sessions for ps in stats),
+        p=sum(ps.p for ps in stats),
+        s=sum(ps.s for ps in stats),
+        a=sum(ps.a for ps in stats),
+        n=sum(ps.n for ps in stats),
+    )
+
+
+def build_anwesenheit_pdf(
+    sessions: list[dict[str, Any]], out_path: Path, combined: bool = False
+) -> list[str]:
+    """Render the attendance evaluation PDF; return the rendered team names.
+
+    ``combined`` merges ``S`` and ``A`` into a single ``S+A`` column and keeps
+    only the ``Quote P`` percentage.
+    """
     teams = stats_per_team(sessions)
     font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
     bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
@@ -387,55 +450,18 @@ def build_anwesenheit_pdf(sessions: list[dict[str, Any]], out_path: Path) -> lis
                 meta,
             )
         )
-        header = ["Spieler", "Termine", "P", "S", "A", "N", "Quote P", "Quote P+S"]
+        headers, col_widths = _columns(combined)
         rows: list[list[Paragraph]] = [
-            [_cell(h, head) for h in header],
+            [_cell(h, head) for h in headers],
         ]
         for ps in stats:
-            rows.append(
-                [
-                    _cell(ps.name, name_cell),
-                    _cell(ps.sessions, cell),
-                    _cell(ps.p, cell),
-                    _cell(ps.s, cell),
-                    _cell(ps.a, cell),
-                    _cell(ps.n, cell),
-                    _cell(_percent(ps.presence_rate), cell),
-                    _cell(_percent(ps.fit_rate), cell),
-                ]
-            )
-        totals = PlayerStats(
-            name="Summe",
-            sessions=sum(ps.sessions for ps in stats),
-            p=sum(ps.p for ps in stats),
-            s=sum(ps.s for ps in stats),
-            a=sum(ps.a for ps in stats),
-            n=sum(ps.n for ps in stats),
-        )
+            rows.append(_make_row(_player_values(ps, combined), name_cell, cell))
         rows.append(
-            [
-                _cell(totals.name, total_cell),
-                _cell(totals.sessions, total_cell),
-                _cell(totals.p, total_cell),
-                _cell(totals.s, total_cell),
-                _cell(totals.a, total_cell),
-                _cell(totals.n, total_cell),
-                _cell(_percent(totals.presence_rate), total_cell),
-                _cell(_percent(totals.fit_rate), total_cell),
-            ]
+            _make_row(_player_values(_totals(stats), combined), total_cell, total_cell)
         )
         table = Table(
             rows,
-            colWidths=[
-                60 * mm,
-                22 * mm,
-                14 * mm,
-                14 * mm,
-                14 * mm,
-                14 * mm,
-                22 * mm,
-                22 * mm,
-            ],
+            colWidths=col_widths,
             repeatRows=1,
         )
         style = [

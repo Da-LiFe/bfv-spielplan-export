@@ -3,9 +3,12 @@ from datetime import date
 
 import pytest
 from pdfminer.high_level import extract_text
+from reportlab.lib.units import mm
 
 import anwesenheit
 import kapitane
+
+PlayerStats = anwesenheit.PlayerStats
 
 TG = "TSV Gilching/Argelsried u13-2"
 TG2 = "TSV Gilching/Argelsried u16w"
@@ -260,3 +263,57 @@ def test_build_anwesenheit_pdf_empty(tmp_path):
     teams = anwesenheit.build_anwesenheit_pdf([], out)
     assert teams == []
     assert "Keine Anwesenheitsdaten" in extract_text(str(out))
+
+
+def test_columns_and_values_variants():
+    headers, widths = anwesenheit._columns(False)
+    assert headers == [
+        "Spieler",
+        "Termine",
+        "P",
+        "S",
+        "A",
+        "N",
+        "Quote P",
+        "Quote P+S",
+    ]
+    headers, widths = anwesenheit._columns(True)
+    assert headers == ["Spieler", "Termine", "P", "S+A", "N", "Quote P"]
+    assert sum(widths) == pytest.approx(182 * mm)
+    stats = [
+        PlayerStats(name="Lena", sessions=2, p=2, n=0),
+        PlayerStats(name="Max", sessions=2, p=0, s=1, n=1),
+    ]
+    assert anwesenheit._player_values(stats[1], True) == (
+        "Max",
+        2,
+        0,
+        1,
+        1,
+        "0 %",
+    )
+    assert len(anwesenheit._player_values(stats[0], False)) == 8
+
+
+def test_totals_aggregates():
+    totals = anwesenheit._totals(
+        [
+            PlayerStats(name="Lena", sessions=2, p=2),
+            PlayerStats(name="Max", sessions=2, s=1, n=1),
+        ]
+    )
+    assert totals.p == 2 and totals.s == 1 and totals.n == 1
+    assert totals.sessions == 4
+
+
+def test_build_anwesenheit_pdf_combined(tmp_path):
+    out = tmp_path / "anwesenheit_kombiniert.pdf"
+    teams = anwesenheit.build_anwesenheit_pdf(make_sessions(), out, combined=True)
+    assert teams == [TG, TG2]
+    text = extract_text(str(out))
+    assert "S+A" in text
+    assert "Quote P" in text
+    assert "Quote P+S" not in text
+    assert "S" in text and "A" in text  # legend still mentions sick/absent
+    assert "Summe" in text
+    assert "100 %" in text  # Lena: 2/2 present
