@@ -5,6 +5,8 @@
 *_spiele_web.csv
 /kapitane.json
 /roster.json
+/anwesenheit.json
+/anwesenheit.pdf
 __pycache__/
 *.pyc
 reports/

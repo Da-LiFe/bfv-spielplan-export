@@ -1,0 +1,19 @@
+{
+  "sessions": [
+    {
+      "date": "2026-09-07",
+      "team": "TSV Gilching/Argelsried u13-2",
+      "values": {"Lena": "P", "Max": "S", "Noah": "N"}
+    },
+    {
+      "date": "2026-09-14",
+      "team": "TSV Gilching/Argelsried u13-2",
+      "values": {"Lena": "P", "Max": "A", "Noah": "P"}
+    },
+    {
+      "date": "2026-09-21",
+      "team": "TSV Gilching/Argelsried (7) u15w2",
+      "values": {"Laura": "P", "Tim": "N"}
+    }
+  ]
+}
