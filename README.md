@@ -126,6 +126,40 @@ contain kid names):
   `Kapitän der Woche · Lena · Mo 07.09. – So 13.09.` A configured team without an
   assignment shows `Kapitän der Woche · folgt` until `--captains-assign` is run.
 
+### Training attendance (Anwesenheit)
+
+Each training session records one status per kid: **P** (anwesend),
+**S** (krank), **A** (abwesend), **N** (keine Rückmeldung). The data lives in
+`anwesenheit.json` (gitignored, kid names) — copy the attendance list from the
+BFV team app and maintain it by hand:
+
+```json
+{
+  "sessions": [
+    { "date": "2026-09-07", "team": "TSV Gilching/Argelsried u13-2",
+      "values": { "Lena": "P", "Max": "S", "Noah": "N" } }
+  ]
+}
+```
+
+- Scaffold a new session from the roster (no typing needed, everyone starts as
+  `N`, you only set the exceptions; duplicate team+date is skipped with a
+  warning):
+  ```bash
+  python3 anwesenheit.py --new --team "TSV Gilching/Argelsried u13-2" --date 2026-09-21
+  ```
+- Render the evaluation PDF (stats work standalone, no game CSVs required):
+  ```bash
+  python3 visualize_spiele.py --anwesenheit
+  # only one team / custom output:
+  python3 visualize_spiele.py --anwesenheit --team "TSV Gilching/Argelsried u13-2" --out team.pdf
+  ```
+- The A4 PDF shows one table per team: `Spieler | Termine | P | S | A | N |
+  Quote P | Quote P+S` plus a totals row. `Quote P` = `P / total`,
+  `Quote P+S` = `(P+S) / total` — `N` counts toward the total, so missing
+  feedback lowers the quota. Dates are accepted as `2026-09-21` or `21.09.2026`,
+  unknown status letters are reported and counted as `N`.
+
 ### Add a team
 
 Add the team's BFV URL (e.g. `https://www.bfv.de/mannschaften/.../<id>`) as a
@@ -143,6 +177,8 @@ new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
 - `<slug>_monthly.pdf` — single-team overview of the next games (from `--team`)
 - `kapitane.json` / `roster.json` — Kapitän duty assignments and team rosters
   (from `--captains-assign`, kid names stay local)
+- `anwesenheit.pdf` — training attendance evaluation (from `--anwesenheit`,
+  `anwesenheit.json` is the hand-maintained source data)
 
 ## Tests
 
@@ -157,4 +193,5 @@ node test/spielplan.test.mjs    # JS harness for the embedded filter/export code
 - `teams.json` — team config: BFV URLs and optional display aliases
 - `fetch_bfv_spielplan.py` — BFV fetcher (single fetch + `--refresh`)
 - `visualize_spiele.py` — HTML/PDF generator
+- `anwesenheit.py` — training attendance data, stats, PDF and `--new` scaffolding
 - `reports/` — project reports (history and design decisions)
