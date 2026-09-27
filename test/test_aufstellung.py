@@ -249,7 +249,8 @@ def test_validate_unreadable_system():
 
 def test_place_players_uses_position_spots():
     placed = {p.name: p for p in aufstellung.place_players(make_lineup())}
-    assert (placed["Lukas"].x, placed["Lukas"].y) == aufstellung.POSITIONS["TOR"]
+    # Default lineup uses 3-2-1 (7v7), so POSITIONS_7V7 is used
+    assert (placed["Lukas"].x, placed["Lukas"].y) == aufstellung.POSITIONS_7V7["TOR"]
     assert placed["Paul"].x < placed["Leon"].x < placed["Felix"].x
     assert placed["Mia"].y < placed["Hannah"].y < placed["Emma"].y
     assert placed["Emma"].number == 4
