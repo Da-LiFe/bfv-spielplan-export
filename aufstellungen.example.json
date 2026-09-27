@@ -1,0 +1,69 @@
+{
+  "spiele": [
+    {
+      "team": "TSV Gilching/Argelsried (7) u8-1",
+      "date": "2026-05-02",
+      "system": "3-2-1",
+      "aufgebot": {
+        "Lukas": 1,
+        "Mia": 2,
+        "Leon": 3,
+        "Emma": 4,
+        "Felix": 5,
+        "Hannah": 6,
+        "Paul": 7
+      },
+      "startelf": [
+        {"name": "Lukas", "pos": "Tor"},
+        {"name": "Leon", "pos": "IV"},
+        {"name": "Felix", "pos": "RV"},
+        {"name": "Paul", "pos": "LV"},
+        {"name": "Mia", "pos": "6er"},
+        {"name": "Hannah", "pos": "8er"},
+        {"name": "Emma", "pos": "9er"}
+      ],
+      "bank": [],
+      "notizen_team": [
+        "Bälle nicht vergessen!"
+      ],
+      "notizen_spieler": {
+        "Lukas": ["Nagelschuhe mitbringen"],
+        "Emma": ["Morgen hat sie Geburtstag – Geburtstagsarmband an!"]
+      }
+    },
+    {
+      "team": "TSV Gilching/Argelsried (9) u9-1",
+      "date": "2026-04-12",
+      "system": "3-2-3",
+      "aufgebot": {
+        "Max Mustermann": 1,
+        "Lena Beispiel": 2,
+        "Paul Test": 3,
+        "Emma Demo": 4,
+        "Finn Probe": 5,
+        "Mia Muster": 6,
+        "Jonas Fallbeispiel": 7,
+        "Lea Dev": 8,
+        "Tim Open": 9
+      },
+      "startelf": [
+        {"name": "Max Mustermann", "pos": "Tor"},
+        {"name": "Lena Beispiel", "pos": "IV"},
+        {"name": "Paul Test", "pos": "IV"},
+        {"name": "Emma Demo", "pos": "IV"},
+        {"name": "Finn Probe", "pos": "6er"},
+        {"name": "Mia Muster", "pos": "8er"},
+        {"name": "Jonas Fallbeispiel", "pos": "9er"},
+        {"name": "Lea Dev", "pos": "LF"},
+        {"name": "Tim Open", "pos": "RF"}
+      ],
+      "bank": ["Jonas Ersatz"],
+      "notizen_team": [
+        "Trinkflasche mitbringen"
+      ],
+      "notizen_spieler": {
+        "Max Mustermann": ["bitte Nagelschuhe mitbringen"]
+      }
+    }
+  ]
+}

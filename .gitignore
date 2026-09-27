@@ -7,6 +7,8 @@
 /roster.json
 /anwesenheit.json
 /anwesenheit.pdf
+/aufstellungen.json
+*_aufstellung_*.pdf
 __pycache__/
 *.pyc
 reports/

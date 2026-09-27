@@ -54,6 +54,10 @@ python3 visualize_spiele.py --team "TSV Gilching/Argelsried u13-2" --next 6 --ou
 # Kapitän (team lead) assignments
 python3 visualize_spiele.py --captains-assign   # fill new duty weeks round-robin
 python3 visualize_spiele.py --captains-check   # verify equal distribution (exit 1 if off)
+
+# Lineup sheet for one game (next game with a lineup, or a given date)
+python3 visualize_spiele.py --aufstellung --team "TSV Gilching/Argelsried u13-2"
+python3 visualize_spiele.py --aufstellung --team "TSV Gilching/Argelsried u13-2" --date 2026-10-03
 ```
 
 ### Team configuration (`teams.json`)
@@ -167,6 +171,56 @@ BFV team app and maintain it by hand:
   you prefer a single headline number per kidaches, this variant is the compact
   one.
 
+### Lineup sheet (Aufstellung)
+
+`python3 visualize_spiele.py --aufstellung --team <Name/Alias> [--date YYYY-MM-DD]`
+renders a one-page A4 lineup sheet for a single game. The lineups live in
+`aufstellungen.json` (gitignored, kid names); see `aufstellungen.example.json`:
+
+```json
+{
+  "spiele": [
+    {
+      "team": "TSV Gilching/Argelsried u13-2",
+      "date": "2026-10-03",
+      "system": "3-2-1",
+      "aufgebot": { "Lukas": 1, "Leon": 3, "Paul": 7, "Tim": 8 },
+      "startelf": [
+        { "name": "Lukas", "pos": "Tor" },
+        { "name": "Leon", "pos": "IV" },
+        { "name": "Paul", "pos": "LV" }
+      ],
+      "bank": ["Tim"],
+      "notizen_team": ["Bälle nicht vergessen!"],
+      "notizen_spieler": { "Lukas": ["Nagelschuhe mitbringen"] }
+    }
+  ]
+}
+```
+
+- A game is identified by `team` (alias or original BFV name, case-insensitive)
+  plus `date` (`2026-10-03` or `03.10.2026`). Without `--date` the next upcoming
+  game with a lineup is used. `--out` overrides the output path.
+- Opponent, kickoff, home/away and competition come from the fetched CSVs. The
+  **Treffpunkt** is always one hour before kickoff; the **Kapitän der Woche**
+  comes from `kapitane.json`. When there is no matching game or captain, the
+  sheet shows `Gegner unbekannt` / `-`.
+- Each starter is drawn on the pitch at the spot of their position code, with
+  their shirt number from `aufgebot`. Supported codes (case-insensitive):
+  `Tor`/`TW`, `LV`, `IV`, `RV`, `6er`/`ZDM`, `ZM`, `LM`, `RM`, `8er`,
+  `10er`/`ZOM`, `LF`, `RF`, `LA`, `RA`, `9er`/`ST`/`MS`. Several players with the
+  same code (e.g. three `IV`) are placed side by side in `startelf` order.
+- The side column lists the bench (`Bank (n)`) and the team notes (`Hinweise`).
+  The per-player notes go into the `Notizen` box, followed by blank lines for
+  handwritten notes.
+- The club logo is downloaded once from BFV (`CLUB_LOGO_URL` in `config.py`) and
+  cached in `.bfv_cache/`; offline, the sheet renders without it.
+- Inconsistencies are printed as warnings: a player without a shirt number,
+  a starting-lineup size that does not match the system (`3-2-1` = 7 players
+  including the keeper), duplicate shirt numbers, a player in both the starting
+  lineup and on the bench, nominated players who are in neither, notes for
+  unknown players, and unknown position codes (plain `AV` asks for `LV` or `RV`).
+
 ### Add a team
 
 Add the team's BFV URL (e.g. `https://www.bfv.de/mannschaften/.../<id>`) as a
@@ -186,11 +240,13 @@ new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
   (from `--captains-assign`, kid names stay local)
 - `anwesenheit.pdf` — training attendance evaluation (from `--anwesenheit`,
   `anwesenheit.json` is the hand-maintained source data)
+- `<slug>_aufstellung_<date>.pdf` — lineup sheet of one game (from
+  `--aufstellung`, `aufstellungen.json` is the hand-maintained source data)
 
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest -v   # Python unit tests (108)
+.venv/bin/python -m pytest -v   # Python unit tests (176)
 node test/spielplan.test.mjs    # JS harness for the embedded filter/export code (needs Node >= 18)
 ```
 
@@ -201,4 +257,5 @@ node test/spielplan.test.mjs    # JS harness for the embedded filter/export code
 - `fetch_bfv_spielplan.py` — BFV fetcher (single fetch + `--refresh`)
 - `visualize_spiele.py` — HTML/PDF generator
 - `anwesenheit.py` — training attendance data, stats, PDF and `--new` scaffolding
+- `aufstellung.py` — lineup data, validation, pitch placement and lineup PDF
 - `reports/` — project reports (history and design decisions)

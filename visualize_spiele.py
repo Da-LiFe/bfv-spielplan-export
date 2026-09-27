@@ -28,6 +28,7 @@ from reportlab.platypus import (
 )
 
 import anwesenheit
+import aufstellung
 import kapitane
 from config import (
     CLUB_MARKERS,
@@ -936,6 +937,110 @@ def handle_anwesenheit(team: str | None, out: str | None, combined: bool) -> Non
     print(f"PDF:  {out_path}")
 
 
+def find_team_game(games: list[Game], team: str, day: datetime) -> Game | None:
+    """Return the (earliest) game of ``team`` on the given day, if any."""
+    matches = [
+        g
+        for g in games
+        if (g["heim"] == team or g["gast"] == team) and g["date"].date() == day.date()
+    ]
+    matches.sort(key=lambda g: g["time"] or "99:99")
+    return matches[0] if matches else None
+
+
+def handle_aufstellung(
+    team_arg: str | None, date_arg: str | None, out: str | None
+) -> None:
+    """Render the lineup sheet of one game from aufstellungen.json."""
+    if not team_arg:
+        sys.exit("--aufstellung benötigt --team.")
+    day = None
+    if date_arg:
+        day = aufstellung.parse_iso_date(date_arg)
+        if day is None:
+            sys.exit(f"Ungültiges Datum '{date_arg}' (erwartet YYYY-MM-DD).")
+
+    lineups, load_warnings = aufstellung.load_lineups(
+        SCRIPT_DIR / aufstellung.AUFSTELLUNGEN_NAME
+    )
+    for warning in load_warnings:
+        print(f"Warnung: {warning}", file=sys.stderr)
+
+    games, _, sources = load_games()
+    lowered = team_arg.lower()
+    source = next(
+        (
+            s
+            for s in sources
+            if s["team"].lower() == lowered
+            or (s.get("original") or "").lower() == lowered
+        ),
+        None,
+    )
+    names = {team_arg}
+    if source:
+        names |= {source["team"], source.get("original") or source["team"]}
+    team_lineups = aufstellung.lineups_for_team(lineups, names)
+    if not team_lineups:
+        available = sorted({lu.team for lu in lineups})
+        sys.exit(
+            f"Keine Aufstellung für '{team_arg}' gefunden. Teams mit Aufstellung: "
+            f"{', '.join(available) or 'keine'}"
+        )
+    lineup = aufstellung.select_lineup(team_lineups, day)
+    if lineup is None:
+        dates = ", ".join(lu.date.isoformat() for lu in team_lineups)
+        what = f"Aufstellung am {day.isoformat()}" if day else "kommende Aufstellung"
+        sys.exit(f"Keine {what} für '{team_arg}'. Vorhandene Termine: {dates}")
+
+    team = source["team"] if source else lineup.team
+    game = find_team_game(
+        games, team, datetime.combine(lineup.date, datetime.min.time())
+    )
+    info = None
+    if game:
+        opponent = game["gast"] if game["heim"] == team else game["heim"]
+        info = aufstellung.GameInfo(
+            opponent=opponent,
+            kickoff=game["time"],
+            competition=game["wettbewerb"],
+            is_home=game["heim"] == team,
+        )
+    else:
+        print(
+            f"Warnung: Kein Spiel von '{team}' am {lineup.date.strftime('%d.%m.%Y')} "
+            "in den *_spiele_web.csv – Gegner und Treffpunkt unbekannt.",
+            file=sys.stderr,
+        )
+
+    assignments = kapitane.load_config(SCRIPT_DIR / kapitane.CONFIG_NAME)["assignments"]
+    week = kapitane.duty_week(lineup.date)
+    captain = next(
+        (
+            assignments[name][week]
+            for name in (team, lineup.team)
+            if assignments.get(name, {}).get(week)
+        ),
+        "",
+    )
+
+    for warning in aufstellung.validate(lineup):
+        print(f"Warnung: {warning}", file=sys.stderr)
+
+    logo = aufstellung.get_logo(
+        cache_path=SCRIPT_DIR / ".bfv_cache" / aufstellung.LOGO_CACHE_PATH.name
+    )
+    out_path = (
+        Path(out)
+        if out
+        else SCRIPT_DIR / f"{slugify(team)}_aufstellung_{lineup.date.isoformat()}.pdf"
+    )
+    aufstellung.build_lineup_pdf(lineup, out_path, info, captain, logo)
+    opponent_txt = f" gegen {info.opponent}" if info else ""
+    print(f"Aufstellung {team} am {lineup.date.strftime('%d.%m.%Y')}{opponent_txt}")
+    print(f"PDF:  {out_path}")
+
+
 def main(argv: list[str] | None = None) -> None:
     """Load games, generate HTML/PDF overviews, or a single-team PDF."""
     ap = argparse.ArgumentParser(
@@ -957,8 +1062,9 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument(
         "--out",
         default=None,
-        help="Output path for the --team or --anwesenheit PDF (default: "
-        "<slug>_monthly.pdf / anwesenheit.pdf)",
+        help="Output path for the --team, --anwesenheit or --aufstellung PDF "
+        "(default: <slug>_monthly.pdf / anwesenheit.pdf / "
+        "<slug>_aufstellung_<date>.pdf)",
     )
     ap.add_argument(
         "--anwesenheit",
@@ -984,7 +1090,22 @@ def main(argv: list[str] | None = None) -> None:
         help="Verify the Kapitän assignments are equally distributed and exit "
         "non-zero otherwise",
     )
+    ap.add_argument(
+        "--aufstellung",
+        action="store_true",
+        help="Render the lineup sheet of one game from aufstellungen.json "
+        "(needs --team; picks the next game with a lineup unless --date is set)",
+    )
+    ap.add_argument(
+        "--date",
+        default=None,
+        help="With --aufstellung: game date as YYYY-MM-DD",
+    )
     args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+
+    if args.aufstellung:
+        handle_aufstellung(args.team, args.date, args.out)
+        return
 
     if args.anwesenheit:
         handle_anwesenheit(args.team, args.out, args.kombiniert)

@@ -48,6 +48,11 @@ PALETTE: list[str] = [
 CSV_DATE_FORMAT: str = "%d.%m.%Y"
 
 CLUB_NAME: str = "TSV Gilching/Argelsried"
+CLUB_LOGO_URL: str = (
+    "https://app.bfv.de/export.media/-/action/getLogo"
+    "/id/00ES8GNH80000005VV0AG08LVUPGND5I"
+    "/verband/00ES8GNCQK000000VV0AG08LVUPGND5I/strat_code/bfv"
+)
 
 CLUB_MARKERS: set[str] = {
     "tsv gilching",
