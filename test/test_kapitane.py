@@ -84,7 +84,13 @@ def test_roster_roundtrip(tmp_path):
     p = tmp_path / "roster.json"
     roster = {TG: ["Lena", "Müller"], "B": []}
     kapitane.save_roster(roster, p)
-    assert json.loads(p.read_text(encoding="utf-8")) == {"teams": roster}
+    expected = {
+        "teams": {
+            TG: {"kids": [{"name": "Lena"}, {"name": "Müller"}]},
+            "B": {"kids": []},
+        }
+    }
+    assert json.loads(p.read_text(encoding="utf-8")) == expected
     assert kapitane.load_roster(p) == roster
 
 
@@ -230,3 +236,61 @@ def test_run_check_exits_unbalanced(capsys):
         assert exc.code == 1
     caught = capsys.readouterr().out
     assert "Kapitän-Verteilung" in caught
+
+
+def test_load_roster_handles_new_format(tmp_path):
+    p = tmp_path / "roster.json"
+    p.write_text(
+        json.dumps(
+            {"teams": {TG: {"kids": [{"name": "Lena"}, {"name": "Max", "number": 2}]}}}
+        ),
+        encoding="utf-8",
+    )
+    assert kapitane.load_roster(p) == {TG: ["Lena", "Max"]}
+
+
+def test_load_roster_with_numbers_basic(tmp_path):
+    p = tmp_path / "roster.json"
+    p.write_text(
+        json.dumps(
+            {
+                "teams": {
+                    TG: {
+                        "kids": [
+                            {"name": "Lena", "number": 1},
+                            {"name": "Max", "number": 2},
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = kapitane.load_roster_with_numbers(p)
+    assert result == {TG: [{"name": "Lena", "number": 1}, {"name": "Max", "number": 2}]}
+
+
+def test_load_roster_with_numbers_missing_numbers(tmp_path):
+    p = tmp_path / "roster.json"
+    p.write_text(
+        json.dumps({"teams": {TG: {"kids": [{"name": "Lena"}]}}}),
+        encoding="utf-8",
+    )
+    result = kapitane.load_roster_with_numbers(p)
+    assert result == {TG: [{"name": "Lena", "number": None}]}
+
+
+def test_load_roster_with_numbers_old_format(tmp_path):
+    p = tmp_path / "roster.json"
+    p.write_text(
+        json.dumps({"teams": {TG: ["Lena", "Max"]}}),
+        encoding="utf-8",
+    )
+    result = kapitane.load_roster_with_numbers(p)
+    assert result == {
+        TG: [{"name": "Lena", "number": None}, {"name": "Max", "number": None}]
+    }
+
+
+def test_load_roster_with_numbers_missing_file(tmp_path):
+    assert kapitane.load_roster_with_numbers(tmp_path / "missing.json") == {}

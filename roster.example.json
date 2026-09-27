@@ -1,11 +1,52 @@
 {
   "teams": {
-    "TSV Gilching/Argelsried u13-2": ["Lena", "Max", "Noah"],
-    "TSV Gilching/Argelsried u16w": ["Emma", "Paul", "Anna", "Leon"],
-    "TSV Gilching/Argelsried (7) u15w2": ["Laura", "Tim"],
-    "TSV Gilching/Argelsried (7) u11w": ["Jonas", "Mia", "Elias"],
-    "TSV Gilching/Argelsried (9) u13w": ["Sophie", "Ben"],
-    "TSV Gilching/Argelsried u15w": ["Marie", "Theo", "Clara"],
-    "TSV Gilching/Argelsried u17w": ["Lukas", "Ida", "Anton"]
+    "TSV Gilching/Argelsried u13-2": {
+      "kids": [
+        {"name": "Lena", "number": 1},
+        {"name": "Max", "number": 2},
+        {"name": "Noah", "number": 3}
+      ]
+    },
+    "TSV Gilching/Argelsried u16w": {
+      "kids": [
+        {"name": "Emma", "number": 1},
+        {"name": "Paul", "number": 2},
+        {"name": "Anna", "number": 3},
+        {"name": "Leon", "number": 4}
+      ]
+    },
+    "TSV Gilching/Argelsried (7) u15w2": {
+      "kids": [
+        {"name": "Laura", "number": 1},
+        {"name": "Tim", "number": 2}
+      ]
+    },
+    "TSV Gilching/Argelsried (7) u11w": {
+      "kids": [
+        {"name": "Jonas", "number": 1},
+        {"name": "Mia", "number": 2},
+        {"name": "Elias", "number": 3}
+      ]
+    },
+    "TSV Gilching/Argelsried (9) u13w": {
+      "kids": [
+        {"name": "Sophie", "number": 1},
+        {"name": "Ben", "number": 2}
+      ]
+    },
+    "TSV Gilching/Argelsried u15w": {
+      "kids": [
+        {"name": "Marie", "number": 1},
+        {"name": "Theo", "number": 2},
+        {"name": "Clara", "number": 3}
+      ]
+    },
+    "TSV Gilching/Argelsried u17w": {
+      "kids": [
+        {"name": "Lukas", "number": 1},
+        {"name": "Ida", "number": 2},
+        {"name": "Anton", "number": 3}
+      ]
+    }
   }
 }

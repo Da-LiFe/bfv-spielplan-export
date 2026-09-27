@@ -876,11 +876,14 @@ def test_main_captains_assign(monkeypatch, tmp_path, capsys):
     helper_write_captain_config(tmp_path, team)
     vis.main(["--captains-assign"])
     cfg = json.loads((tmp_path / "kapitane.json").read_text(encoding="utf-8"))
-    roster = json.loads((tmp_path / "roster.json").read_text(encoding="utf-8"))
     assigned = cfg["assignments"][team]
     assert len(assigned) == 1
     (kid,) = assigned.values()
-    assert kid in roster["teams"][team]
+    roster_data = json.loads((tmp_path / "roster.json").read_text(encoding="utf-8"))
+    # New format: roster["teams"][team] is {"kids": [...]}
+    kids = roster_data["teams"][team].get("kids", [])
+    kid_names = [k["name"] if isinstance(k, dict) else k for k in kids]
+    assert kid in kid_names
     out = capsys.readouterr().out
     assert "Kapitän-Verteilung" in out
     assert "gleichmäßig" in out
