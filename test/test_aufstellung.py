@@ -9,6 +9,7 @@ import pytest
 from pdfminer.high_level import extract_text
 
 import aufstellung
+import kapitane
 import visualize_spiele as vis
 
 TEAM = "TSV Gilching/Argelsried U8"
@@ -279,6 +280,104 @@ def test_place_players_clamps_to_pitch():
     assert min(xs) == pytest.approx(0.08)
 
 
+def test_is_7v7_detects_7_player_systems():
+    assert aufstellung._is_7v7(make_lineup(system="3-2-1")) is True
+    assert aufstellung._is_7v7(make_lineup(system="2-2-2")) is True
+    assert aufstellung._is_7v7(make_lineup(system="3-3-1")) is False  # 3+3+1+1=8
+    assert aufstellung._is_7v7(make_lineup(system="3-2-2")) is False  # 3+2+2+1=8
+    assert aufstellung._is_7v7(make_lineup(system="4-3-1")) is False  # 4+3+1+1=9
+
+
+def test_place_players_7v7_uses_compact_positions():
+    lineup = make_lineup(
+        system="3-2-1",
+        startelf=[
+            {"name": "A", "pos": "Tor"},
+            {"name": "B", "pos": "IV"},
+            {"name": "C", "pos": "LV"},
+            {"name": "D", "pos": "RV"},
+            {"name": "E", "pos": "6er"},
+            {"name": "F", "pos": "10er"},
+            {"name": "G", "pos": "9er"},
+        ],
+    )
+    placed = {p.name: p for p in aufstellung.place_players(lineup)}
+    # 7v7 positions should be more compact than 11v11
+    assert placed["F"].y == pytest.approx(aufstellung.POSITIONS_7V7["10ER"][1])
+    assert placed["G"].y == pytest.approx(aufstellung.POSITIONS_7V7["9ER"][1])
+    # Attackers should be closer to midfield than in 11v11
+    assert placed["F"].y < aufstellung.POSITIONS["10ER"][1]
+    assert placed["G"].y < aufstellung.POSITIONS["9ER"][1]
+    # Defenders and 6er stay at same y
+    assert placed["A"].y == pytest.approx(aufstellung.POSITIONS_7V7["TOR"][1])
+    assert placed["B"].y == pytest.approx(aufstellung.POSITIONS_7V7["IV"][1])
+    assert placed["E"].y == pytest.approx(aufstellung.POSITIONS_7V7["6ER"][1])
+
+
+def test_place_players_11v7_uses_standard_positions():
+    lineup = make_lineup(
+        system="4-3-3",
+        startelf=[
+            {"name": "A", "pos": "Tor"},
+            {"name": "B", "pos": "IV"},
+            {"name": "C", "pos": "LV"},
+            {"name": "D", "pos": "RV"},
+            {"name": "E", "pos": "6er"},
+            {"name": "F", "pos": "10er"},
+            {"name": "G", "pos": "9er"},
+            {"name": "H", "pos": "LF"},
+            {"name": "I", "pos": "RF"},
+        ],
+    )
+    placed = {p.name: p for p in aufstellung.place_players(lineup)}
+    # 11v7 positions should use standard (non-compact) positions
+    assert placed["F"].y == pytest.approx(aufstellung.POSITIONS["10ER"][1])
+    assert placed["G"].y == pytest.approx(aufstellung.POSITIONS["9ER"][1])
+    assert placed["H"].y == pytest.approx(aufstellung.POSITIONS["LF"][1])
+    assert placed["I"].y == pytest.approx(aufstellung.POSITIONS["RF"][1])
+
+
+def test_place_players_7v7_uses_dynamic_spread():
+    lineup = make_lineup(
+        system="3-2-1",
+        startelf=[{"name": "A", "pos": "IV"}, {"name": "B", "pos": "IV"}],
+    )
+    placed = {p.name: p for p in aufstellung.place_players(lineup)}
+    # Dynamic spread: 0.8 / 2 = 0.4, so A at 0.3, B at 0.7
+    assert placed["A"].x == pytest.approx(0.3)
+    assert placed["B"].x == pytest.approx(0.7)
+    assert placed["B"].x - placed["A"].x == pytest.approx(0.4)
+
+
+def test_place_players_7v7_three_ivs():
+    lineup = make_lineup(
+        system="3-2-1",
+        startelf=[
+            {"name": "A", "pos": "IV"},
+            {"name": "B", "pos": "IV"},
+            {"name": "C", "pos": "IV"},
+        ],
+    )
+    placed = {p.name: p for p in aufstellung.place_players(lineup)}
+    # Dynamic spread: 0.8 / 3 = 0.267, formula: x = 0.5 + (i - 1) * spread
+    spread = 0.8 / 3
+    assert placed["A"].x == pytest.approx(0.5 - spread)
+    assert placed["B"].x == pytest.approx(0.5)
+    assert placed["C"].x == pytest.approx(0.5 + spread)
+
+
+def test_place_players_11v7_uses_fixed_spread():
+    lineup = make_lineup(
+        system="4-3-3",
+        startelf=[{"name": "A", "pos": "IV"}, {"name": "B", "pos": "IV"}],
+    )
+    placed = {p.name: p for p in aufstellung.place_players(lineup)}
+    # Fixed spread: 0.22, so A at 0.39, B at 0.61
+    assert placed["A"].x == pytest.approx(0.5 - aufstellung.SPREAD / 2)
+    assert placed["B"].x == pytest.approx(0.5 + aufstellung.SPREAD / 2)
+    assert placed["B"].x - placed["A"].x == pytest.approx(aufstellung.SPREAD)
+
+
 # --- logo ------------------------------------------------------------------
 
 
@@ -502,3 +601,178 @@ def test_find_team_game_prefers_earliest():
     ]
     assert vis.find_team_game(games, TEAM, d)["time"] == "09:00"
     assert vis.find_team_game(games, "Z", d) is None
+
+
+def test_save_lineups_roundtrip(tmp_path):
+    lu = make_lineup()
+    path = tmp_path / "aufstellungen.json"
+    aufstellung.save_lineups([lu], path)
+    loaded, warnings = aufstellung.load_lineups(path)
+    assert len(loaded) == 1
+    assert not warnings
+    saved = loaded[0]
+    assert saved.team == lu.team
+    assert saved.date == lu.date
+    assert saved.system == lu.system
+    assert saved.aufgebot == lu.aufgebot
+    assert saved.startelf == lu.startelf
+    assert saved.bank == lu.bank
+    assert saved.notizen_team == lu.notizen_team
+    assert saved.notizen_spieler == lu.notizen_spieler
+
+
+def test_save_lineups_multiple(tmp_path):
+    lineups = [
+        make_lineup(day="2026-05-01"),
+        make_lineup(day="2026-05-08"),
+    ]
+    path = tmp_path / "aufstellungen.json"
+    aufstellung.save_lineups(lineups, path)
+    loaded, _ = aufstellung.load_lineups(path)
+    assert len(loaded) == 2
+
+
+def test_new_lineup_from_roster():
+    roster = [
+        {"name": "Lukas", "number": 1},
+        {"name": "Mia", "number": 2},
+        {"name": "Leon", "number": 3},
+        {"name": "Emma", "number": 4},
+        {"name": "Felix", "number": 5},
+        {"name": "Hannah", "number": 6},
+        {"name": "Paul", "number": 7},
+        {"name": "Tim", "number": 8},
+    ]
+    lu = aufstellung.new_lineup(TEAM, date(2026, 5, 2), roster)
+    assert lu.team == TEAM
+    assert lu.date == date(2026, 5, 2)
+    assert lu.system == "3-2-1"
+    assert lu.aufgebot == {
+        "Lukas": 1,
+        "Mia": 2,
+        "Leon": 3,
+        "Emma": 4,
+        "Felix": 5,
+        "Hannah": 6,
+        "Paul": 7,
+        "Tim": 8,
+    }
+    assert len(lu.startelf) == 7
+    assert lu.startelf[0].name == "Lukas"
+    assert lu.startelf[0].pos == "Tor"
+    assert lu.startelf[1].name == "Mia"
+    assert lu.startelf[1].pos == "IV"
+    assert lu.startelf[2].name == "Leon"
+    assert lu.startelf[2].pos == "LV"
+    assert lu.startelf[3].name == "Emma"
+    assert lu.startelf[3].pos == "RV"
+    assert lu.startelf[4].name == "Felix"
+    assert lu.startelf[4].pos == "6er"
+    assert lu.startelf[5].name == "Hannah"
+    assert lu.startelf[5].pos == "10er"
+    assert lu.startelf[6].name == "Paul"
+    assert lu.startelf[6].pos == "9er"
+    assert lu.bank == ["Tim"]
+    assert lu.notizen_team == []
+    assert lu.notizen_spieler == {}
+
+
+def test_new_lineup_auto_numbers():
+    roster = [
+        {"name": "Lena"},
+        {"name": "Max", "number": 5},
+        {"name": "Noah"},
+    ]
+    lu = aufstellung.new_lineup(TEAM, date(2026, 5, 2), roster)
+    # Auto-assigns 1, 2, 3 sequentially regardless of existing numbers
+    assert lu.aufgebot == {"Lena": 1, "Max": 5, "Noah": 3}
+    assert lu.startelf[0].name == "Lena"
+    # All 3 kids fit in the first 7 positions, so no bench
+    assert lu.bank == []
+
+
+def test_new_lineup_empty_roster():
+    lu = aufstellung.new_lineup(TEAM, date(2026, 5, 2), [])
+    assert lu.aufgebot == {}
+    assert lu.startelf == []
+    assert lu.bank == []
+
+
+def test_cli_new_writes_entry(tmp_path, monkeypatch, capsys):
+    roster = tmp_path / kapitane.ROSTER_NAME
+    roster.write_text(
+        json.dumps(
+            {
+                "teams": {
+                    TEAM: {
+                        "kids": [
+                            {"name": "Lena", "number": 1},
+                            {"name": "Max", "number": 2},
+                            {"name": "Noah", "number": 3},
+                        ]
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
+    out = tmp_path / "aufstellungen.json"
+    monkeypatch.setattr(aufstellung, "DEFAULT_PATH", out)
+    rc = aufstellung.cli_main(["--new", "--team", TEAM, "--date", "2026-05-02"])
+    assert rc == 0
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert len(data["spiele"]) == 1
+    entry = data["spiele"][0]
+    assert entry["team"] == TEAM
+    assert entry["date"] == "2026-05-02"
+    assert entry["system"] == "3-2-1"
+    assert entry["aufgebot"] == {"Lena": 1, "Max": 2, "Noah": 3}
+    assert len(entry["startelf"]) == 3
+    assert entry["bank"] == []
+    captured = capsys.readouterr()
+    assert "Aufstellung:" in captured.out
+    assert "3 Spieler" in captured.out
+
+
+def test_cli_new_duplicate_skips(tmp_path, monkeypatch, capsys):
+    roster = tmp_path / kapitane.ROSTER_NAME
+    roster.write_text(
+        json.dumps({"teams": {TEAM: {"kids": [{"name": "Lena", "number": 1}]}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
+    out = tmp_path / "aufstellungen.json"
+    aufstellung.save_lineups([make_lineup(day="2026-05-02")], out)
+    monkeypatch.setattr(aufstellung, "DEFAULT_PATH", out)
+    rc = aufstellung.cli_main(["--new", "--team", TEAM, "--date", "2026-05-02"])
+    assert rc == 0
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert len(data["spiele"]) == 1
+    captured = capsys.readouterr()
+    assert "existiert bereits" in captured.out
+
+
+def test_cli_new_missing_roster(tmp_path, monkeypatch):
+    roster = tmp_path / kapitane.ROSTER_NAME
+    roster.write_text(
+        json.dumps({"teams": {"Other Team": {"kids": []}}}), encoding="utf-8"
+    )
+    monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
+    with pytest.raises(SystemExit) as exc:
+        aufstellung.cli_main(["--new", "--team", TEAM, "--date", "2026-05-02"])
+    assert "Kein Kader" in str(exc.value)
+
+
+def test_cli_new_invalid_date(capsys):
+    with pytest.raises(SystemExit):
+        aufstellung.cli_main(["--new", "--team", TEAM, "--date", "morgen"])
+    captured = capsys.readouterr()
+    assert "ungültiges Datum" in captured.err
+
+
+def test_cli_new_missing_args(capsys):
+    with pytest.raises(SystemExit):
+        aufstellung.cli_main(["--new", "--team", TEAM])
+    captured = capsys.readouterr()
+    assert "--new requires --team and --date" in captured.err

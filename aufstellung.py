@@ -16,6 +16,7 @@ spot, bench and team notes, and a notes box with the per-player notes.
 
 from __future__ import annotations
 
+import argparse
 import html as htmllib
 import json
 import re
@@ -44,6 +45,7 @@ from reportlab.platypus import (
     Table,
 )
 
+import kapitane
 from config import CLUB_LOGO_URL, CLUB_NAME, MONTHS_DE, SCRIPT_DIR, WEEKDAYS_DE
 
 AUFSTELLUNGEN_NAME = "aufstellungen.json"
@@ -84,6 +86,30 @@ POSITIONS: dict[str, tuple[float, float]] = {
     "9ER": (0.5, 0.84),
     "ST": (0.5, 0.84),
     "MS": (0.5, 0.84),
+}
+
+# Compact 7v7 positions (3-2-1): attackers pulled closer to midfield
+POSITIONS_7V7: dict[str, tuple[float, float]] = {
+    "TOR": (0.5, 0.07),
+    "TW": (0.5, 0.07),
+    "LV": (0.14, 0.24),
+    "IV": (0.5, 0.2),
+    "RV": (0.86, 0.24),
+    "6ER": (0.5, 0.4),
+    "ZDM": (0.5, 0.4),
+    "ZM": (0.5, 0.48),
+    "LM": (0.14, 0.48),
+    "RM": (0.86, 0.48),
+    "8ER": (0.5, 0.48),
+    "10ER": (0.5, 0.5),
+    "ZOM": (0.5, 0.5),
+    "LF": (0.16, 0.50),
+    "RF": (0.84, 0.50),
+    "LA": (0.16, 0.58),
+    "RA": (0.84, 0.58),
+    "9ER": (0.5, 0.58),
+    "ST": (0.5, 0.58),
+    "MS": (0.5, 0.58),
 }
 GOALKEEPER_CODES = {"TOR", "TW"}
 AMBIGUOUS_POSITIONS = {"AV": "LV oder RV"}
@@ -351,21 +377,32 @@ def validate(lineup: Lineup) -> list[str]:
     return warnings
 
 
+def _is_7v7(lineup: Lineup) -> bool:
+    """Return True if the lineup uses a 7v7 system (7 players incl. keeper)."""
+    size = system_size(lineup.system)
+    return size is not None and size == 7
+
+
 def place_players(lineup: Lineup) -> list[PlacedPlayer]:
     """Compute pitch coordinates for every starter from their position code.
 
     Players sharing a code (e.g. three IV) are spread horizontally around the
     code's spot in ``startelf`` order; unknown codes go to a row in midfield.
+    7v7 lineups use compact positions with attackers closer to midfield.
     """
+    positions_map = POSITIONS_7V7 if _is_7v7(lineup) else POSITIONS
     groups: dict[str, list[Starter]] = {}
     for s in lineup.startelf:
         code = s.pos.upper()
-        key = code if code in POSITIONS else "?"
+        key = code if code in positions_map else "?"
         groups.setdefault(key, []).append(s)
     placed: list[PlacedPlayer] = []
     for key, members in groups.items():
-        base_x, base_y = POSITIONS.get(key, (0.5, UNKNOWN_ROW_Y))
-        spread = SPREAD if key != "?" else 0.8 / max(len(members), 1)
+        base_x, base_y = positions_map.get(key, (0.5, UNKNOWN_ROW_Y))
+        if _is_7v7(lineup):
+            spread = 0.8 / max(len(members), 1)
+        else:
+            spread = SPREAD if key != "?" else 0.8 / max(len(members), 1)
         n = len(members)
         for i, s in enumerate(members):
             x = base_x + (i - (n - 1) / 2) * spread
@@ -676,3 +713,142 @@ def build_lineup_pdf(
         bottomMargin=bottom_margin,
         title=f"Aufstellung {lineup.team} – {lineup.date.isoformat()}",
     ).build(story)
+
+
+def save_lineups(lineups: list[Lineup], path: Path | None = None) -> None:
+    """Write ``lineups`` back to ``aufstellungen.json``."""
+    file_path = path or DEFAULT_PATH
+    entries = []
+    for lu in lineups:
+        entry: dict[str, Any] = {
+            "team": lu.team,
+            "date": lu.date.isoformat(),
+            "system": lu.system,
+            "aufgebot": {str(k): v for k, v in lu.aufgebot.items()},
+            "startelf": [{"name": s.name, "pos": s.pos} for s in lu.startelf],
+            "bank": list(lu.bank),
+            "notizen_team": list(lu.notizen_team),
+            "notizen_spieler": {str(k): list(v) for k, v in lu.notizen_spieler.items()},
+        }
+        entries.append(entry)
+    file_path.write_text(
+        json.dumps({"spiele": entries}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def new_lineup(team: str, game_date: date, roster: list[dict[str, Any]]) -> Lineup:
+    """Build a new lineup entry from roster data.
+
+    All roster kids are nominated with shirt numbers (auto-assigned when
+    missing).  The first 7 players form the default starting lineup
+    (3-2-1), the rest go on the bench.
+    """
+    # Assign shirt numbers: use existing number if available, else auto-assign
+    aufgebot: dict[str, int] = {}
+    for i, kid in enumerate(roster):
+        name = kid["name"]
+        number = kid.get("number")
+        if number is None:
+            number = i + 1
+        aufgebot[name] = int(number)
+
+    # Default positions for a 3-2-1 formation
+    default_positions = [
+        "Tor",
+        "IV",
+        "LV",
+        "RV",
+        "6er",
+        "10er",
+        "9er",
+    ]
+
+    startelf: list[Starter] = []
+    bank: list[str] = []
+
+    for i, kid in enumerate(roster):
+        name = kid["name"]
+        if i < 7:
+            pos = default_positions[i] if i < len(default_positions) else "ZM"
+            startelf.append(Starter(name=name, pos=pos))
+        else:
+            bank.append(name)
+
+    return Lineup(
+        team=team,
+        date=game_date,
+        system="3-2-1",
+        aufgebot=aufgebot,
+        startelf=startelf,
+        bank=bank,
+    )
+
+
+def cli_main(argv: list[str] | None = None) -> int:
+    """Standalone CLI for scaffolding a new lineup entry."""
+    ap = argparse.ArgumentParser(
+        description="Lineup sheet generator and session scaffolding."
+    )
+    ap.add_argument(
+        "--new",
+        action="store_true",
+        help="Scaffold a new lineup entry in aufstellungen.json for a team and "
+        "date, pre-filling every roster kid as nominated player",
+    )
+    ap.add_argument(
+        "--team",
+        default=None,
+        help="Team alias/name (must match a key in roster.json for --new)",
+    )
+    ap.add_argument(
+        "--date",
+        default=None,
+        help="Game date as 2026-05-02 or 02.05.2026 (required with --new)",
+    )
+    args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+
+    if not args.new:
+        ap.error("only --new is supported")
+    if not args.team or not args.date:
+        ap.error("--new requires --team and --date")
+    game_date = parse_iso_date(args.date)
+    if game_date is None:
+        ap.error(f"ungültiges Datum: {args.date}")
+    path = DEFAULT_PATH
+
+    roster = kapitane.load_roster_with_numbers()
+    # Try to match the team name (case-insensitive)
+    team_key = None
+    for key in roster:
+        if key.lower() == args.team.lower():
+            team_key = key
+            break
+    if team_key is None:
+        available = ", ".join(sorted(roster.keys())) or "keine"
+        sys.exit(f"Kein Kader für '{args.team}' gefunden. Teams mit Kader: {available}")
+    kids = roster[team_key]
+    if not kids:
+        sys.exit(f"Kader für '{args.team}' ist leer.")
+
+    lineups, _ = load_lineups(path)
+    for lu in lineups:
+        if lu.team.lower() == team_key.lower() and lu.date == game_date:
+            print(
+                f"Warnung: Eintrag für '{team_key}' am {game_date.isoformat()} "
+                "existiert bereits – nichts geändert."
+            )
+            return 0
+
+    lineup = new_lineup(team_key, game_date, kids)
+    lineups.append(lineup)
+    save_lineups(lineups, path)
+    print(
+        f"Aufstellung: {team_key} am {game_date.strftime('%d.%m.%Y')} "
+        f"– {len(kids)} Spieler"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    cli_main()

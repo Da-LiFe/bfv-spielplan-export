@@ -55,6 +55,9 @@ python3 visualize_spiele.py --team "TSV Gilching/Argelsried u13-2" --next 6 --ou
 python3 visualize_spiele.py --captains-assign   # fill new duty weeks round-robin
 python3 visualize_spiele.py --captains-check   # verify equal distribution (exit 1 if off)
 
+# Scaffold a new lineup entry from roster.json
+python3 aufstellung.py --new --team "TSV Gilching/Argelsried u13-2" --date 2026-10-03
+
 # Lineup sheet for one game (next game with a lineup, or a given date)
 python3 visualize_spiele.py --aufstellung --team "TSV Gilching/Argelsried u13-2"
 python3 visualize_spiele.py --aufstellung --team "TSV Gilching/Argelsried u13-2" --date 2026-10-03
@@ -97,15 +100,25 @@ Each team can assign one kid as "Kapitän" for the whole calendar week
 (Monday–Sunday) in which a game takes place. Both files are gitignored (they
 contain kid names):
 
-- `roster.json` — the kid per team that can be on duty:
+- `roster.json` — the kids per team that can be on duty (optionally with
+  shirt numbers, used by `--new` for lineups):
 
 ```json
 {
   "teams": {
-    "TSV Gilching/Argelsried u13-2": ["Lena", "Max", "Noah"]
+    "TSV Gilching/Argelsried u13-2": {
+      "kids": [
+        {"name": "Lena", "number": 1},
+        {"name": "Max", "number": 2},
+        {"name": "Noah", "number": 3}
+      ]
+    }
   }
 }
 ```
+
+Old flat format (`["Lena", "Max", "Noah"]`) is still supported for reading —
+`save_roster` always writes the new structured format.
 
 - `kapitane.json` — the week→kid assignments (created/filled by
   `--captains-assign`, individual weeks stay hand-editable):
@@ -173,9 +186,20 @@ BFV team app and maintain it by hand:
 
 ### Lineup sheet (Aufstellung)
 
-`python3 visualize_spiele.py --aufstellung --team <Name/Alias> [--date YYYY-MM-DD]`
-renders a one-page A4 lineup sheet for a single game. The lineups live in
-`aufstellungen.json` (gitignored, kid names); see `aufstellungen.example.json`:
+Scaffold a new entry from `roster.json` (no typing needed, every roster kid
+becomes a nominated player with auto-assigned numbers):
+
+```bash
+python3 aufstellung.py --new --team "TSV Gilching/Argelsried u13-2" --date 2026-10-03
+```
+
+Render the PDF for a single game:
+
+```bash
+python3 visualize_spiele.py --aufstellung --team <Name/Alias> [--date YYYY-MM-DD]
+```
+
+The lineups live in `aufstellungen.json` (gitignored, kid names); see `aufstellungen.example.json`:
 
 ```json
 {
