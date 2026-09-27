@@ -601,13 +601,14 @@ def build_lineup_pdf(
         ("Treffpunkt", f"{meet} Uhr" if meet else "-"),
         ("Formation", lineup.system or "-"),
         ("Kapitän der Woche", captain or "-"),
+        ("Kader", f"{len(lineup.startelf) + len(lineup.bank)} Spielerinnen"),
     ]
     info = Table(
         [
             [Paragraph(esc(lbl), label) for lbl, _ in info_items],
             [Paragraph(esc(val), value) for _, val in info_items],
         ],
-        colWidths=[content_w / 3] * 3,
+        colWidths=[content_w / len(info_items)] * len(info_items),
         style=[
             ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(PITCH_BG)),
             ("LEFTPADDING", (0, 0), (-1, -1), 10),
