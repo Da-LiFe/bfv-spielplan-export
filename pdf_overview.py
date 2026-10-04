@@ -14,7 +14,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from config import CLUB_NAME
+import aufstellung
+from config import CLUB_NAME, SCRIPT_DIR
 from games import Game, short_place
 from pdf_common import (
     BOLD_FONT,
@@ -31,17 +32,6 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     font = FONT
     bold_font = BOLD_FONT
     styles = getSampleStyleSheet()
-    title = ParagraphStyle(
-        "t", parent=styles["Title"], fontSize=18, spaceAfter=2, fontName=font
-    )
-    subtitle = ParagraphStyle(
-        "st",
-        parent=styles["Normal"],
-        textColor=colors.grey,
-        fontSize=10,
-        spaceAfter=14,
-        fontName=font,
-    )
     day_head = ParagraphStyle(
         "dh",
         parent=styles["Normal"],
@@ -75,11 +65,19 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     total = sum(len(v) for v in days.values())
     hot = sum(1 for v in days.values() if len(v) >= 2)
 
+    # Get club logo (same as team PDF and lineup sheet)
+    logo = aufstellung.get_logo(
+        cache_path=SCRIPT_DIR / ".bfv_cache" / aufstellung.LOGO_CACHE_PATH.name
+    )
+
     story = [
-        Paragraph(f"Spielplan \u2013 {CLUB_NAME}", title),
-        Paragraph(
-            f"{total} Spiele \u00b7 {len(days)} Spieltage \u00b7 {hot} Tage mit mehreren Spielen",
-            subtitle,
+        aufstellung.build_club_header(
+            "Spielplan",
+            [
+                f"{total} Spiele \u00b7 {len(days)} Spieltage \u00b7 {hot} Tage mit mehreren Spielen"
+            ],
+            logo,
+            CONTENT_WIDTH,
         ),
     ]
 

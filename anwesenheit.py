@@ -26,13 +26,13 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+import aufstellung
 import kapitane
 from config import CSV_DATE_FORMAT, SCRIPT_DIR
 from pdf_common import (
     BOLD_FONT,
     CONTENT_WIDTH,
     FONT,
-    LINK_COLOR,
     PAGE_MARGIN,
     german_now,
 )
@@ -295,30 +295,6 @@ def build_anwesenheit_pdf(
     font = FONT
     bold_font = BOLD_FONT
 
-    overline = ParagraphStyle(
-        "ov",
-        fontName=bold_font,
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor(LINK_COLOR),
-        spaceAfter=1,
-    )
-    title = ParagraphStyle(
-        "t",
-        fontName=bold_font,
-        fontSize=20,
-        leading=24,
-        textColor=colors.HexColor("#222222"),
-        spaceAfter=1,
-    )
-    subtitle = ParagraphStyle(
-        "st",
-        fontName=font,
-        fontSize=10,
-        leading=13,
-        textColor=colors.grey,
-        spaceAfter=0,
-    )
     section = ParagraphStyle(
         "sec",
         fontName=bold_font,
@@ -376,28 +352,20 @@ def build_anwesenheit_pdf(
         spaceBefore=4,
     )
 
-    band = Table(
-        [
-            [
-                [
-                    Paragraph("ANWESENHEIT · TRAINING", overline),
-                    Paragraph("Anwesenheit – Auswertung", title),
-                    Paragraph(f"Stand: {esc(german_now())}", subtitle),
-                ]
-            ]
-        ],
-        colWidths=[CONTENT_WIDTH],
-        style=[
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eef4fb")),
-            ("BOX", (0, 0), (-1, -1), 1.2, colors.HexColor("#cfe0f2")),
-            ("TOPPADDING", (0, 0), (-1, -1), 9),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ],
+    # Get club logo (same as other PDFs)
+    logo = aufstellung.get_logo(
+        cache_path=SCRIPT_DIR / ".bfv_cache" / aufstellung.LOGO_CACHE_PATH.name
     )
 
-    story = [band, Spacer(1, 6)]
+    story = [
+        aufstellung.build_club_header(
+            "Anwesenheit – Auswertung",
+            [f"Stand: {esc(german_now())}"],
+            logo,
+            CONTENT_WIDTH,
+        ),
+        Spacer(1, 6),
+    ]
     if not teams:
         story.append(Paragraph("Keine Anwesenheitsdaten vorhanden.", section))
     for team, stats in teams.items():
