@@ -28,7 +28,8 @@ def make_sources():
 
 def test_empty_config():
     cfg = kapitane.empty_config()
-    assert cfg == {"teams": {}, "assignments": {}}
+    assert cfg.teams == {}
+    assert cfg.assignments == {}
 
 
 def test_duty_week():
@@ -57,22 +58,24 @@ def test_load_config(tmp_path):
         encoding="utf-8",
     )
     cfg = kapitane.load_config(p)
-    assert cfg == {"assignments": {TG: {"2026-37": "Lena"}}}
+    assert cfg == {TG: {"2026-37": "Lena"}}
 
     p.write_text("{kaputt", encoding="utf-8")
-    assert kapitane.load_config(p) == {"assignments": {}}
-    assert kapitane.load_config(tmp_path / "missing.json") == {"assignments": {}}
+    assert kapitane.load_config(p) == {}
+    assert kapitane.load_config(tmp_path / "missing.json") == {}
 
 
 def test_load_config_unexpected_shape(tmp_path):
     p = tmp_path / "kapitane.json"
     p.write_text(json.dumps({"teams": {"x": "not-a-list"}}), encoding="utf-8")
-    assert kapitane.load_config(p) == {"assignments": {}}
+    assert kapitane.load_config(p) == {}
 
 
 def test_save_config_roundtrip(tmp_path):
     p = tmp_path / "kapitane.json"
-    cfg = {"teams": {TG: ["Lena", "Müller"]}, "assignments": {TG: {"2026-37": "Lena"}}}
+    cfg = kapitane.CaptainConfig(
+        teams={TG: ["Lena", "Müller"]}, assignments={TG: {"2026-37": "Lena"}}
+    )
     kapitane.save_config(cfg, p)
     assert json.loads(p.read_text(encoding="utf-8")) == {
         "assignments": {TG: {"2026-37": "Lena"}}
@@ -107,9 +110,12 @@ def test_load_all_merges(tmp_path):
     assign_path = tmp_path / "kapitane.json"
     roster_path = tmp_path / "roster.json"
     kapitane.save_roster({TG: ["A", "B"]}, roster_path)
-    kapitane.save_config({"assignments": {TG: {"2026-37": "A"}}}, assign_path)
+    kapitane.save_config(
+        kapitane.CaptainConfig(assignments={TG: {"2026-37": "A"}}), assign_path
+    )
     cfg = kapitane.load_all(assign_path, roster_path)
-    assert cfg == {"teams": {TG: ["A", "B"]}, "assignments": {TG: {"2026-37": "A"}}}
+    assert cfg.teams == {TG: ["A", "B"]}
+    assert cfg.assignments == {TG: {"2026-37": "A"}}
 
 
 def test_round_robin_distributes_fairly():
@@ -151,20 +157,20 @@ def test_round_robin_ignores_past_assignments():
 
 
 def test_ensure_assignments_fills_and_is_idempotent():
-    cfg = {"teams": {TG: ["A", "B"]}, "assignments": {}}
+    cfg = kapitane.CaptainConfig(teams={TG: ["A", "B"]}, assignments={})
     weeks = {TG: ["2026-37", "2026-38", "2026-39"]}
     assert kapitane.ensure_assignments(cfg, weeks) == []
-    assert set(cfg["assignments"][TG]) == set(weeks[TG])
-    before = dict(cfg["assignments"][TG])
+    assert set(cfg.assignments[TG]) == set(weeks[TG])
+    before = dict(cfg.assignments[TG])
     assert kapitane.ensure_assignments(cfg, weeks) == []
-    assert cfg["assignments"][TG] == before
+    assert cfg.assignments[TG] == before
 
 
 def test_ensure_assignments_warns_without_roster():
-    cfg = {"teams": {}, "assignments": {}}
+    cfg = kapitane.CaptainConfig(teams={}, assignments={})
     warnings = kapitane.ensure_assignments(cfg, {TG: ["2026-37"]})
     assert warnings and "Kader" in warnings[0]
-    assert TG not in cfg["assignments"]
+    assert TG not in cfg.assignments
 
 
 def test_teams_duty_weeks_filters_recent():
@@ -188,10 +194,10 @@ def test_teams_duty_weeks_filters_recent():
 
 
 def test_check_distribution_balanced():
-    cfg = {
-        "teams": {TG: ["A", "B"]},
-        "assignments": {TG: {"2026-37": "A", "2026-38": "B"}},
-    }
+    cfg = kapitane.CaptainConfig(
+        teams={TG: ["A", "B"]},
+        assignments={TG: {"2026-37": "A", "2026-38": "B"}},
+    )
     weeks = {TG: ["2026-37", "2026-38"]}
     res = kapitane.check_distribution(cfg, weeks)
     assert res.balanced
@@ -201,10 +207,10 @@ def test_check_distribution_balanced():
 
 
 def test_check_distribution_unbalanced():
-    cfg = {
-        "teams": {TG: ["A", "B"]},
-        "assignments": {TG: {"2026-37": "A", "2026-38": "A", "2026-39": "A"}},
-    }
+    cfg = kapitane.CaptainConfig(
+        teams={TG: ["A", "B"]},
+        assignments={TG: {"2026-37": "A", "2026-38": "A", "2026-39": "A"}},
+    )
     weeks = {TG: ["2026-37", "2026-38", "2026-39"]}
     res = kapitane.check_distribution(cfg, weeks)
     assert not res.balanced
@@ -212,10 +218,10 @@ def test_check_distribution_unbalanced():
 
 
 def test_check_distribution_flags_missing_and_unknown():
-    cfg = {
-        "teams": {TG: ["A", "B"]},
-        "assignments": {TG: {"2026-37": "Fremd", "2026-38": "A"}},
-    }
+    cfg = kapitane.CaptainConfig(
+        teams={TG: ["A", "B"]},
+        assignments={TG: {"2026-37": "Fremd", "2026-38": "A"}},
+    )
     weeks = {TG: ["2026-37", "2026-38", "2026-39"]}
     res = kapitane.check_distribution(cfg, weeks)
     assert not res.balanced
@@ -226,7 +232,7 @@ def test_check_distribution_flags_missing_and_unknown():
 
 
 def test_check_distribution_no_roster():
-    cfg = {"teams": {}, "assignments": {TG: {"2026-37": "A"}}}
+    cfg = kapitane.CaptainConfig(teams={}, assignments={TG: {"2026-37": "A"}})
     res = kapitane.check_distribution(cfg, {TG: ["2026-37"]})
     assert not res.balanced
     assert "kein Kader" in "".join(res.lines)

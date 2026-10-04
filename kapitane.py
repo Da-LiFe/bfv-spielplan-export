@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from config import SCRIPT_DIR, WD
+from games import Game, Source
 from util import load_json_lenient, match_team
 
 CONFIG_NAME = "kapitane.json"
@@ -34,9 +35,17 @@ class Kid:
     number: int | None = None
 
 
-def empty_config() -> dict[str, Any]:
+@dataclass
+class CaptainConfig:
+    """Merged team rosters and captain assignments."""
+
+    teams: dict[str, list[str]] = field(default_factory=dict)
+    assignments: dict[str, dict[str, str]] = field(default_factory=dict)
+
+
+def empty_config() -> CaptainConfig:
     """Return an empty, valid merged teams/assignments structure."""
-    return {"teams": {}, "assignments": {}}
+    return CaptainConfig()
 
 
 def duty_week(game_date: date) -> str:
@@ -62,19 +71,17 @@ def week_range(week_key: str) -> str:
     )
 
 
-def captains_for(cfg: dict[str, Any], names: set[str]) -> dict[str, str]:
+def captains_for(cfg: CaptainConfig, names: set[str]) -> dict[str, str]:
     """Return week -> kid mapping merging all name variants of a team.
 
     *names* should include every alias / original BFV name / lineup name that
     refers to the same team.  Lookups are case-insensitive via ``match_team``.
     """
     merged: dict[str, str] = {}
-    assignments = cfg.get("assignments", {})
     for name in names:
-        canonical = match_team(assignments.keys(), name)
+        canonical = match_team(cfg.assignments.keys(), name)
         if canonical:
-            week_assignments = assignments.get(canonical, {})
-            merged.update(week_assignments)
+            merged.update(cfg.assignments.get(canonical, {}))
     return merged
 
 
@@ -148,11 +155,11 @@ def save_roster(roster: dict[str, list[str]], path: Path | None = None) -> None:
     )
 
 
-def load_config(path: Path | None = None) -> dict[str, Any]:
+def load_config(path: Path | None = None) -> dict[str, dict[str, str]]:
     """Load and normalize ``kapitane.json`` (the assignments only)."""
     cfg_path = path or DEFAULT_CONFIG_PATH
     if not cfg_path.exists():
-        return {"assignments": {}}
+        return {}
     try:
         data = json.loads(cfg_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
@@ -160,13 +167,13 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
             f"{cfg_path.name}: ungültiges JSON – keine Zuteilungen geladen.",
             file=sys.stderr,
         )
-        return {"assignments": {}}
+        return {}
     return normalize_config(data)
 
 
-def normalize_config(data: Any) -> dict[str, Any]:
+def normalize_config(data: Any) -> dict[str, dict[str, str]]:
     """Coerce arbitrary JSON into the expected assignments structure."""
-    assignments: dict[str, Any] = {}
+    assignments: dict[str, dict[str, str]] = {}
     if isinstance(data, dict):
         raw_assignments = data.get("assignments")
         if isinstance(raw_assignments, dict):
@@ -175,26 +182,24 @@ def normalize_config(data: Any) -> dict[str, Any]:
                     assignments[str(team)] = {
                         str(w): str(k) for w, k in weeks.items() if k
                     }
-    return {"assignments": assignments}
+    return assignments
 
 
 def load_all(
     assign_path: Path | None = None, roster_path: Path | None = None
-) -> dict[str, Any]:
+) -> CaptainConfig:
     """Merge ``roster.json`` (``teams``) and ``kapitane.json`` (``assignments``)."""
-    return {
-        "teams": load_roster(roster_path),
-        "assignments": load_config(assign_path)["assignments"],
-    }
+    return CaptainConfig(
+        teams=load_roster(roster_path),
+        assignments=load_config(assign_path),
+    )
 
 
-def save_config(cfg: dict[str, Any], path: Path | None = None) -> None:
+def save_config(cfg: CaptainConfig, path: Path | None = None) -> None:
     """Write the assignments from ``cfg`` to ``kapitane.json``."""
     cfg_path = path or DEFAULT_CONFIG_PATH
     cfg_path.write_text(
-        json.dumps(
-            {"assignments": cfg.get("assignments", {})}, ensure_ascii=False, indent=2
-        )
+        json.dumps({"assignments": cfg.assignments}, ensure_ascii=False, indent=2)
         + "\n",
         encoding="utf-8",
     )
@@ -225,7 +230,7 @@ def assign_round_robin(
 
 
 def ensure_assignments(
-    cfg: dict[str, Any], teams_weeks: dict[str, list[str]]
+    cfg: CaptainConfig, teams_weeks: dict[str, list[str]]
 ) -> list[str]:
     """Fill every team's missing duty weeks; return warnings as strings.
 
@@ -237,14 +242,14 @@ def ensure_assignments(
         weeks = sorted(set(weeks))
         if not weeks:
             continue
-        roster = cfg["teams"].get(team, [])
-        existing = cfg["assignments"].get(team, {})
+        roster = cfg.teams.get(team, [])
+        existing = cfg.assignments.get(team, {})
         if not roster:
             warnings.append(
                 f"Kein Kader für '{team}' in {ROSTER_NAME} – keine Auto-Zuteilung."
             )
             continue
-        cfg["assignments"][team] = assign_round_robin(weeks, roster, existing)
+        cfg.assignments[team] = assign_round_robin(weeks, roster, existing)
     return warnings
 
 
@@ -261,7 +266,7 @@ class CheckResult:
 
 
 def check_distribution(
-    cfg: dict[str, Any], teams_weeks: dict[str, list[str]]
+    cfg: CaptainConfig, teams_weeks: dict[str, list[str]]
 ) -> CheckResult:
     """Count each kid's duty weeks and judge whether the load is balanced.
 
@@ -272,14 +277,14 @@ def check_distribution(
     lines.append("Kapitän-Verteilung")
     lines.append("===================")
     reported = 0
-    teams = sorted(set(teams_weeks) | set(cfg["assignments"]))
+    teams = sorted(set(teams_weeks) | set(cfg.assignments))
     for team in teams:
         weeks = sorted(set(teams_weeks.get(team, [])))
-        if not weeks and not cfg["assignments"].get(team):
+        if not weeks and not cfg.assignments.get(team):
             continue
         reported += 1
-        roster = cfg["teams"].get(team, [])
-        assignments = cfg["assignments"].get(team, {})
+        roster = cfg.teams.get(team, [])
+        assignments = cfg.assignments.get(team, {})
         counts: Counter[str] = Counter()
         for kid in roster:
             counts[kid] = 0
@@ -327,7 +332,7 @@ def check_distribution(
 
 
 def teams_duty_weeks(
-    games: list[Any], sources: list[Any], today: date | None = None
+    games: list[Game], sources: list[Source], today: date | None = None
 ) -> dict[str, list[str]]:
     """Map each club team to the sorted duty-week keys of its upcoming games."""
     today = today or datetime.now().date()
@@ -336,9 +341,8 @@ def teams_duty_weeks(
         team = src["team"]
         weeks: set[str] = set()
         for g in games:
-            d = g["date"]
-            if hasattr(d, "date"):
-                d = d.date()
+            raw_d = g["date"]
+            d: date = raw_d.date() if hasattr(raw_d, "date") else raw_d
             if (g["heim"] == team or g["gast"] == team) and d >= today:
                 weeks.add(duty_week(d))
         if weeks:

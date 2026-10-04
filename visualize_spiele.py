@@ -268,12 +268,12 @@ def main(argv: list[str] | None = None) -> None:
         )
         # Merge captain assignments across all name variants (alias, original, etc.)
         candidate_names = {team}
-        for team_name in cfg.get("teams", {}):
+        for team_name in cfg.teams:
             if match_team([team_name], team):
                 candidate_names.add(team_name)
         captain_by_week = (
             kapitane.captains_for(cfg, candidate_names)
-            if candidate_names & set(cfg["assignments"])
+            if candidate_names & set(cfg.assignments)
             else {}
         )
         build_team_pdf(
