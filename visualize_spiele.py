@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import html as htmllib
 import json
 import re
 import sys
@@ -16,8 +15,6 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
@@ -32,23 +29,28 @@ import kapitane
 from config import (
     CLUB_MARKERS,
     CLUB_NAME,
-    CSV_DATE_FORMAT,
     LINK_COLOR,
-    MONTHS_DE,
     PALETTE,
     SCRIPT_DIR,
     WD,
     WEEKDAYS_DE,
 )
-from util import maps_url, place_text
-
-# Register NotoSans for proper umlaut/support in PDFs
-_FONT_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Regular.ttf"
-_FONT_BOLD_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Bold.ttf"
-if _FONT_PATH.exists():
-    pdfmetrics.registerFont(TTFont("NotoSans", str(_FONT_PATH)))
-if _FONT_BOLD_PATH.exists():
-    pdfmetrics.registerFont(TTFont("NotoSans-Bold", str(_FONT_BOLD_PATH)))
+from pdf_common import (
+    AWAY_COLOR,
+    BOLD_FONT,
+    CONTENT_WIDTH,
+    FONT,
+    HOME_COLOR,
+    PAGE_MARGIN,
+    german_now,
+)
+from util import (
+    esc,
+    game_sort_key,
+    maps_url,
+    parse_date,
+    place_text,
+)
 
 
 class Source(TypedDict, total=False):
@@ -77,14 +79,6 @@ class Game(TypedDict):
     is_home: bool
     home_color: str
     away_color: str
-
-
-def parse_datum(s: str) -> datetime | None:
-    """Parse a DD.MM.YYYY date string, or return None."""
-    try:
-        return datetime.strptime(s.strip(), CSV_DATE_FORMAT)
-    except ValueError:
-        return None
 
 
 def load_alias_map(teams_path: Path | None = None) -> dict[str, str]:
@@ -151,9 +145,11 @@ def next_games_for_team(
     upcoming = [
         g
         for g in games
-        if (g["heim"] == team or g["gast"] == team) and g["date"].date() >= today.date()
+        if (g["heim"] == team or g["gast"] == team)
+        and (g["date"].date() if isinstance(g["date"], datetime) else g["date"])
+        >= today.date()
     ]
-    upcoming.sort(key=lambda g: (g["date"], g["time"] or "99:99"))
+    upcoming.sort(key=game_sort_key)
     return upcoming[:num]
 
 
@@ -194,7 +190,7 @@ def load_games(
         skipped = 0
         skipped_teams = 0
         for r in rows:
-            d = parse_datum(r.get("Datum", ""))
+            d = parse_date(r.get("Datum", ""))
             if d is None:
                 skipped += 1
                 continue
@@ -206,7 +202,7 @@ def load_games(
             home_l = heim.lower()
             file_games.append(
                 Game(
-                    date=d,
+                    date=datetime(d.year, d.month, d.day),
                     datum=d.strftime("%d.%m.%Y"),
                     wd=WD[d.weekday()],
                     time=(r.get("Uhrzeit") or "").strip(),
@@ -255,7 +251,7 @@ def load_games(
 
 def group_by_day(games: list[Game]) -> OrderedDict[str, list[Game]]:
     """Group games by date, sorted by date then time."""
-    games.sort(key=lambda g: (g["date"], g["time"] or "99:99"))
+    games.sort(key=game_sort_key)
     days: OrderedDict[str, list[Game]] = OrderedDict()
     for g in games:
         days.setdefault(g["datum"], []).append(g)
@@ -266,17 +262,6 @@ def short_place(spielort: str, limit: int = 45) -> str:
     """Shorten a location string, replacing pipes with commas."""
     s = re.sub(r"\s*\|\s*", ", ", spielort)
     return s if len(s) <= limit else s[: limit - 1] + "\u2026"
-
-
-def esc(t: str) -> str:
-    """HTML-escape a string."""
-    return htmllib.escape(t, quote=True)
-
-
-def german_now() -> str:
-    """Return the current date/time in German format."""
-    now = datetime.now()
-    return f"{WEEKDAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}, {now:%H:%M} Uhr"
 
 
 def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
@@ -418,8 +403,8 @@ def build_html(
 
 def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     """Build a multi-page PDF overview of all games."""
-    font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
-    bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
+    font = FONT
+    bold_font = BOLD_FONT
     styles = getSampleStyleSheet()
     title = ParagraphStyle(
         "t", parent=styles["Title"], fontSize=18, spaceAfter=2, fontName=font
@@ -455,13 +440,10 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
         "cw", parent=cell, textColor=colors.white, fontSize=9, fontName=font
     )
 
-    LEFT_MARGIN = 14 * mm
-    RIGHT_MARGIN = 14 * mm
     HEADER_COL = 16 * mm
     VS_COL = 46 * mm
     COMP_COL = 40 * mm
     HOME_COL = 20 * mm
-    CONTENT_WIDTH = A4[0] - LEFT_MARGIN - RIGHT_MARGIN
     DYNAMIC_COL = CONTENT_WIDTH - HEADER_COL - VS_COL - COMP_COL - HOME_COL
     col_w = [HEADER_COL, DYNAMIC_COL, VS_COL, COMP_COL, HOME_COL]
 
@@ -503,7 +485,7 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
                 f'<font color="{g["away_color"]}">{esc(away_l)}</font>'
             )
             link = (
-                f'<link href="{esc(g["link"])}"><font color="#0d6efd">Spiel ↗</font></link>'
+                f'<link href="{esc(g["link"])}"><font color="{LINK_COLOR}">Spiel ↗</font></link>'
                 if g["link"]
                 else ""
             )
@@ -548,8 +530,8 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
     SimpleDocTemplate(
         str(out_path),
         pagesize=A4,
-        leftMargin=LEFT_MARGIN,
-        rightMargin=RIGHT_MARGIN,
+        leftMargin=PAGE_MARGIN,
+        rightMargin=PAGE_MARGIN,
         topMargin=14 * mm,
         bottomMargin=14 * mm,
         title=f"Spielplan – {CLUB_NAME}",
@@ -588,7 +570,7 @@ def _team_game_card(
     captain_week_txt: str = "",
 ) -> Table:
     """Render one upcoming game as a friendly card for parents."""
-    accent = "#198754" if g["is_home"] else "#6c75cd"
+    accent = HOME_COLOR if g["is_home"] else AWAY_COLOR
     accent_bar = 2.6 * mm
     side_pad = 10 * mm
     card_content = card_width - accent_bar
@@ -762,13 +744,9 @@ def build_team_pdf(
     mapping show the name, missing keys fall back to "folgt". ``logo`` is the
     club logo shown in the header (same header as the lineup sheet).
     """
-    font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
-    bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
+    font = FONT
+    bold_font = BOLD_FONT
     styles = getSampleStyleSheet()
-
-    LEFT_MARGIN = 14 * mm
-    RIGHT_MARGIN = 14 * mm
-    CONTENT_WIDTH = A4[0] - LEFT_MARGIN - RIGHT_MARGIN
 
     legend = ParagraphStyle(
         "lg",
@@ -801,9 +779,9 @@ def build_team_pdf(
     legend_row = Table(
         [
             [
-                _pill("H", "#198754", font, 7),
+                _pill("H", HOME_COLOR, font, 7),
                 Paragraph("Heimspiel", legend),
-                _pill("A", "#6c75cd", font, 7),
+                _pill("A", AWAY_COLOR, font, 7),
                 Paragraph("Auswärtsspiel", legend),
                 legend_txt,
             ]
@@ -824,7 +802,9 @@ def build_team_pdf(
         if captain_by_week is None:
             story.append(_team_game_card(g, font, bold_font, CONTENT_WIDTH))
             continue
-        wk = kapitane.duty_week(g["date"].date())
+        wk = kapitane.duty_week(
+            g["date"].date() if isinstance(g["date"], datetime) else g["date"]
+        )
         captain = captain_by_week.get(wk, "")
         week_txt = kapitane.week_range(wk) if wk in captain_by_week else ""
         story.append(
@@ -843,8 +823,8 @@ def build_team_pdf(
     SimpleDocTemplate(
         str(out_path),
         pagesize=A4,
-        leftMargin=LEFT_MARGIN,
-        rightMargin=RIGHT_MARGIN,
+        leftMargin=PAGE_MARGIN,
+        rightMargin=PAGE_MARGIN,
         topMargin=14 * mm,
         bottomMargin=14 * mm,
         title=f"Überblick Spieltage – {team}",

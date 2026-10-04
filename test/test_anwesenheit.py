@@ -26,12 +26,12 @@ def test_empty_data():
     assert anwesenheit.empty_data() == {"sessions": [], "warnings": []}
 
 
-def test_parse_session_date():
-    assert anwesenheit.parse_session_date("2026-09-21") == date(2026, 9, 21)
-    assert anwesenheit.parse_session_date("21.09.2026") == date(2026, 9, 21)
-    assert anwesenheit.parse_session_date("kaputt") is None
-    assert anwesenheit.parse_session_date(42) is None
-    assert anwesenheit.parse_session_date(date(2026, 9, 21)) == date(2026, 9, 21)
+def test_parse_date():
+    assert anwesenheit.parse_date("2026-09-21") == date(2026, 9, 21)
+    assert anwesenheit.parse_date("21.09.2026") == date(2026, 9, 21)
+    assert anwesenheit.parse_date("kaputt") is None
+    assert anwesenheit.parse_date(42) is None
+    assert anwesenheit.parse_date(date(2026, 9, 21)) == date(2026, 9, 21)
 
 
 def test_normalize_data_valid():

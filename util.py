@@ -69,9 +69,12 @@ def parse_date(value: Any) -> date | None:
     return None
 
 
-def game_sort_key(game: dict[str, Any]) -> tuple[date, str]:
+def game_sort_key(game: dict[str, Any] | Any) -> Any:
     """Sort key for a game dict: by date, then time (missing → last)."""
-    return (game.get("date") or date.max, game.get("time") or "99:99")
+    raw_date = game.get("date")
+    if isinstance(raw_date, datetime):
+        raw_date = raw_date.date()
+    return (raw_date or date.max, game.get("time") or "99:99")
 
 
 def match_team(candidates: Iterable[str], query: str) -> str | None:
@@ -86,7 +89,9 @@ def match_team(candidates: Iterable[str], query: str) -> str | None:
     return None
 
 
-def load_json_lenient(path: str | os.PathLike[str], default: dict | None = None) -> dict:
+def load_json_lenient(
+    path: str | os.PathLike[str], default: dict | None = None
+) -> dict:
     """Load a JSON file, silently falling back to *default* on any error."""
     if default is None:
         default = {}

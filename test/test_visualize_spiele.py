@@ -1,7 +1,7 @@
 import csv
 import json
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import pytest
 from pdfminer.high_level import extract_text
@@ -112,7 +112,7 @@ def write_fixtures(tmp_path):
 
 
 def make_game(datum, time, heim, gast, **kw):
-    d = vis.parse_datum(datum)
+    d = vis.parse_date(datum)
     return {
         "date": d,
         "datum": d.strftime("%d.%m.%Y"),
@@ -129,16 +129,20 @@ def make_game(datum, time, heim, gast, **kw):
     }
 
 
-# ------------------------------------------------------------ parse_datum()
+# ------------------------------------------------------------ parse_date()
 
 
-def test_parse_datum_valid():
-    assert vis.parse_datum("20.09.2026") == datetime(2026, 9, 20)
+def test_parse_date_valid():
+    assert vis.parse_date("20.09.2026") == date(2026, 9, 20)
 
 
-@pytest.mark.parametrize("value", ["", "abc", "2026-09-20"])
-def test_parse_datum_invalid_returns_none(value):
-    assert vis.parse_datum(value) is None
+@pytest.mark.parametrize("value", ["", "abc"])
+def test_parse_date_invalid_returns_none(value):
+    assert vis.parse_date(value) is None
+
+
+def test_parse_date_iso_returns_date():
+    assert vis.parse_date("2026-09-20") == date(2026, 9, 20)
 
 
 # ------------------------------------------------------------- team_color()
@@ -316,9 +320,9 @@ def test_load_games_with_aliases(monkeypatch, tmp_path):
 
 def test_group_by_day_sorts_and_groups():
     games = [
-        {"date": vis.parse_datum("27.09.2026"), "datum": "27.09.2026", "time": "09:30"},
-        {"date": vis.parse_datum("20.09.2026"), "datum": "20.09.2026", "time": "14:00"},
-        {"date": vis.parse_datum("20.09.2026"), "datum": "20.09.2026", "time": "10:00"},
+        {"date": vis.parse_date("27.09.2026"), "datum": "27.09.2026", "time": "09:30"},
+        {"date": vis.parse_date("20.09.2026"), "datum": "20.09.2026", "time": "14:00"},
+        {"date": vis.parse_date("20.09.2026"), "datum": "20.09.2026", "time": "10:00"},
     ]
     days = vis.group_by_day(games)
     assert list(days.keys()) == ["20.09.2026", "27.09.2026"]
@@ -895,8 +899,8 @@ def test_build_team_pdf_with_captain_row(tmp_path):
             "original": team,
         }
     ]
-    w1 = vis.kapitane.duty_week(games[0]["date"].date())
-    w2 = vis.kapitane.duty_week(games[1]["date"].date())
+    w1 = vis.kapitane.duty_week(games[0]["date"])
+    w2 = vis.kapitane.duty_week(games[1]["date"])
     out = tmp_path / "with_captain.pdf"
     vis.build_team_pdf(games, team, sources, out, len(games), {w1: "Lena", w2: "Max"})
     text = extract_text(str(out))

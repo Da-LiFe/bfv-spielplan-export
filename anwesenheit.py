@@ -13,11 +13,10 @@ session count, P/S/A/N totals and the presence quotas ``P / total`` and
 from __future__ import annotations
 
 import argparse
-import html as htmllib
 import sys
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -25,13 +24,19 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 import kapitane
-from config import CSV_DATE_FORMAT, MONTHS_DE, SCRIPT_DIR, WEEKDAYS_DE
-from util import load_json_strict, write_json
+from config import CSV_DATE_FORMAT, SCRIPT_DIR
+from pdf_common import (
+    BOLD_FONT,
+    CONTENT_WIDTH,
+    FONT,
+    LINK_COLOR,
+    PAGE_MARGIN,
+    german_now,
+)
+from util import esc, load_json_strict, parse_date, write_json
 
 ANWESENHEIT_NAME = "anwesenheit.json"
 DEFAULT_PATH = SCRIPT_DIR / ANWESENHEIT_NAME
@@ -45,45 +50,15 @@ STATUS_LABELS = {
     "N": "keine Rückmeldung",
 }
 
-_FONT_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Regular.ttf"
-_FONT_BOLD_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Bold.ttf"
-if _FONT_PATH.exists():
-    pdfmetrics.registerFont(TTFont("NotoSans", str(_FONT_PATH)))
-if _FONT_BOLD_PATH.exists():
-    pdfmetrics.registerFont(TTFont("NotoSans-Bold", str(_FONT_BOLD_PATH)))
 
-
-def esc(text: Any) -> str:
-    """HTML-escape a string."""
-    return htmllib.escape(str(text), quote=True)
-
-
-def german_now() -> str:
-    """Return the current date/time in German format."""
-    now = datetime.now()
-    return f"{WEEKDAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}, {now:%H:%M} Uhr"
+def format_quota(pct: float) -> str:
+    """Format a percentage as 'X.X%'."""
+    return f"{pct:.1f}%"
 
 
 def empty_data() -> dict[str, Any]:
     """Return an empty attendance dataset."""
     return {"sessions": [], "warnings": []}
-
-
-def parse_session_date(value: Any) -> date | None:
-    """Parse an ISO (2026-09-21) or German (21.09.2026) date string."""
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if not isinstance(value, str):
-        return None
-    s = value.strip()
-    for fmt in ("%Y-%m-%d", CSV_DATE_FORMAT):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except ValueError:
-            pass
-    return None
 
 
 def normalize_data(raw: Any) -> dict[str, Any]:
@@ -106,7 +81,7 @@ def normalize_data(raw: Any) -> dict[str, Any]:
                 f"anwesenheit.json: Eintrag {i} ist kein Objekt – übersprungen."
             )
             continue
-        d = parse_session_date(session.get("date"))
+        d = parse_date(session.get("date"))
         if d is None:
             warnings.append(
                 f"anwesenheit.json: ungültiges Datum '{session.get('date')}' – Eintrag übersprungen."
@@ -174,7 +149,7 @@ def save_data(sessions: list[dict[str, Any]], path: Path | None = None) -> None:
 
 def session_exists(sessions: list[dict[str, Any]], team: str, d: date) -> bool:
     """Return whether a session for ``team`` on ``d`` already exists."""
-    d = d if isinstance(d, date) else parse_session_date(d)  # type: ignore[assignment]
+    d = d if isinstance(d, date) else parse_date(d)  # type: ignore[assignment]
     return any(s["team"] == team and s["date"] == d for s in sessions)
 
 
@@ -317,19 +292,15 @@ def build_anwesenheit_pdf(
     only the ``Quote P`` percentage.
     """
     teams = stats_per_team(sessions)
-    font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
-    bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
-
-    LEFT_MARGIN = 14 * mm
-    RIGHT_MARGIN = 14 * mm
-    CONTENT_WIDTH = A4[0] - LEFT_MARGIN - RIGHT_MARGIN
+    font = FONT
+    bold_font = BOLD_FONT
 
     overline = ParagraphStyle(
         "ov",
         fontName=bold_font,
         fontSize=9,
         leading=11,
-        textColor=colors.HexColor("#0d6efd"),
+        textColor=colors.HexColor(LINK_COLOR),
         spaceAfter=1,
     )
     title = ParagraphStyle(
@@ -483,8 +454,8 @@ def build_anwesenheit_pdf(
     SimpleDocTemplate(
         str(out_path),
         pagesize=A4,
-        leftMargin=LEFT_MARGIN,
-        rightMargin=RIGHT_MARGIN,
+        leftMargin=PAGE_MARGIN,
+        rightMargin=PAGE_MARGIN,
         topMargin=14 * mm,
         bottomMargin=14 * mm,
         title="Anwesenheit – Auswertung",
@@ -524,7 +495,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         ap.error("only --new is supported")
     if not args.team or not args.date:
         ap.error("--new requires --team and --date")
-    d = parse_session_date(args.date)
+    d = parse_date(args.date)
     if d is None:
         ap.error(f"ungültiges Datum: {args.date}")
     path = Path(args.file) if args.file else DEFAULT_PATH
