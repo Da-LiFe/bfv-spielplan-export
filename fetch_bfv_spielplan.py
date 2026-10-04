@@ -379,7 +379,7 @@ def refresh(teams_path: Path) -> None:
         regenerate_html(SCRIPT_DIR)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point: fetch a single team or refresh all teams."""
     ap = argparse.ArgumentParser(
         description="Fetch a BFV team's full match schedule and write a CSV."
@@ -402,11 +402,11 @@ def main() -> None:
         default=None,
         help="Path to teams JSON file (default: teams.json next to this script)",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     if args.refresh:
         refresh(Path(args.teams) if args.teams else SCRIPT_DIR / "teams.json")
-        return
+        return 0
     if not args.url:
         ap.error("URL or --refresh is required")
 
@@ -422,6 +422,7 @@ def main() -> None:
         out_path.write_bytes(fetched.read_bytes())
 
     print(f"Wrote {n} matches to {out_path}")
+    return 0
 
 
 if __name__ == "__main__":
