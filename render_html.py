@@ -17,10 +17,19 @@ from pdf_common import german_now
 from util import esc, maps_url
 
 
+def script_json(data: object) -> str:
+    """JSON that is safe inside ``<script>``: ``<``, ``>``, ``&`` as ``\\uXXXX``."""
+    return (
+        json.dumps(data, ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
+
 def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
     """Serialize games to JSON for embedding in the HTML."""
-    # Escape </ to prevent premature closing of <script> tags.
-    return json.dumps(
+    return script_json(
         [
             {
                 "d": g["datum"],
@@ -33,17 +42,13 @@ def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
             }
             for day in days.values()
             for g in day
-        ],
-        ensure_ascii=False,
-    ).replace("</", "\\u003c/")
+        ]
+    )
 
 
 def render_aliases_js(sources: list) -> str:
     """Serialize team aliases to JSON for embedding in the HTML."""
-    return json.dumps(
-        [[s["team"], s.get("original", s["team"])] for s in sources],
-        ensure_ascii=False,
-    ).replace("</", "\\u003c/")
+    return script_json([[s["team"], s.get("original", s["team"])] for s in sources])
 
 
 def render_game_row(g: Game, is_hot: bool) -> str:

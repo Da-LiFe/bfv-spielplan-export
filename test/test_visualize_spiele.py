@@ -9,6 +9,7 @@ from pdfminer.high_level import extract_text
 import games as games_module
 import kapitane
 import pdf_team
+import render_html
 import visualize_spiele as vis
 
 U15 = "TSV Gilching/Argelsried U15"
@@ -444,6 +445,18 @@ def test_render_games_js():
     assert "w" in data[0]
     assert "p" in data[0]
     assert "l" in data[0]
+
+
+def test_embedded_json_cannot_close_the_script_tag():
+    """T12: <, > and & are escaped; the data still round-trips."""
+    evil = "FC </script><!-- A&B >"
+    days = {"20.09.2026": [make_game("20.09.2026", "10:00", U15, evil)]}
+    games_js = render_html.render_games_js(days)
+    aliases_js = render_html.render_aliases_js([{"team": evil, "original": U15}])
+    for js in (games_js, aliases_js):
+        assert not set("<>&") & set(js)
+    assert json.loads(games_js)[0]["a"] == evil
+    assert json.loads(aliases_js) == [[evil, U15]]
 
 
 # -------------------------------------------------------------- build_html()
