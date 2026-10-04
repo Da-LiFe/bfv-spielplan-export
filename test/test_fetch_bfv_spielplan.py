@@ -211,6 +211,12 @@ def test_fetch_all_matches_honours_max_iter(monkeypatch):
 # ---------------------------------------------------------------- fetch_one()
 
 
+@pytest.fixture(autouse=True)
+def _tmp_data(script_dir):
+    """CSVs and the overview are written next to the scripts: keep them out of the repo."""
+    return script_dir
+
+
 FAKE_ROWS = [
     {
         "Wettbewerb": "U15 Kreis",
@@ -235,8 +241,8 @@ FAKE_ROWS = [
 
 def test_fetch_one_writes_utf8_bom_csv(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch, "fetch_all_matches", lambda team_id: FAKE_ROWS)
-    monkeypatch.chdir(tmp_path)
     out_path, n = fetch.fetch_one(TEAM_URL)
+    assert out_path.parent == tmp_path
     assert n == 2
     assert out_path.name == "tsv-gilching-argelsried-2-7_spiele_web.csv"
     raw = out_path.read_bytes()
@@ -380,7 +386,6 @@ def test_refresh_skips_visualize_if_missing(tmp_path, monkeypatch, capsys):
     teams_file = tmp_path / "teams.json"
     teams_file.write_text(json.dumps([{"url": TEAM_URL}]), encoding="utf-8")
     monkeypatch.setattr(fetch, "fetch_one", lambda url: (Path("a.csv"), 1))
-    monkeypatch.setattr(fetch, "SCRIPT_DIR", tmp_path)
     fetch.refresh(teams_file)
     assert "Total: 1 matches" in capsys.readouterr().out
 
@@ -484,7 +489,6 @@ def test_main_requires_url_or_refresh(monkeypatch):
 
 def test_main_single_url(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(fetch, "fetch_all_matches", lambda team_id: FAKE_ROWS)
-    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("sys.argv", ["fetch_bfv_spielplan.py", TEAM_URL])
     fetch.main()
     out = capsys.readouterr().out
