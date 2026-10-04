@@ -6,13 +6,18 @@ Small pure functions used by more than one module; constants live in
 
 from __future__ import annotations
 
+import html as htmllib
 import json
 import os
 import sys
 import tempfile
 import urllib.parse
+from collections.abc import Iterable
+from datetime import date, datetime
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
+
+from config import CSV_DATE_FORMAT, MONTHS_DE, WEEKDAYS_DE
 
 T = TypeVar("T")
 
@@ -28,6 +33,67 @@ def maps_url(spielort: str) -> str:
     if not q:
         return ""
     return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(q)
+
+
+def esc(text: Any) -> str:
+    """HTML-escape a string for reportlab paragraphs."""
+    return htmllib.escape(str(text), quote=True)
+
+
+def german_now() -> str:
+    """Return the current date/time in German format."""
+    now = datetime.now()
+    return (
+        f"{WEEKDAYS_DE[now.weekday()]}, {now.day}. "
+        f"{MONTHS_DE[now.month - 1]} {now.year}, {now:%H:%M} Uhr"
+    )
+
+
+def parse_date(value: Any) -> date | None:
+    """Parse an ISO (2026-05-02) or German (02.05.2026) date string.
+
+    Also accepts ``datetime`` and ``date`` objects directly.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    s = value.strip()
+    for fmt in ("%Y-%m-%d", CSV_DATE_FORMAT):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def game_sort_key(game: dict[str, Any]) -> tuple[date, str]:
+    """Sort key for a game dict: by date, then time (missing → last)."""
+    return (game.get("date") or date.max, game.get("time") or "99:99")
+
+
+def match_team(candidates: Iterable[str], query: str) -> str | None:
+    """Return the first candidate matching *query* (case-insensitive).
+
+    Returns ``None`` when no match is found.
+    """
+    lowered = query.lower()
+    for name in candidates:
+        if name.lower() == lowered:
+            return name
+    return None
+
+
+def load_json_lenient(path: str | os.PathLike[str], default: dict | None = None) -> dict:
+    """Load a JSON file, silently falling back to *default* on any error."""
+    if default is None:
+        default = {}
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, ValueError):
+        return default
 
 
 def load_json_strict(path: str | os.PathLike[str], default: dict | None = None) -> dict:

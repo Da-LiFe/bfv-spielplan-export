@@ -18,7 +18,6 @@ team notes, and a notes box with the per-player notes.
 from __future__ import annotations
 
 import argparse
-import html as htmllib
 import re
 import sys
 import time
@@ -35,7 +34,6 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     Flowable,
     Image,
@@ -54,7 +52,8 @@ from config import (
     SCRIPT_DIR,
     WEEKDAYS_DE,
 )
-from util import load_json_strict, maps_url, place_text, write_json
+from pdf_common import BOLD_FONT, FONT
+from util import esc, load_json_strict, maps_url, parse_date, place_text, write_json
 
 AUFSTELLUNGEN_NAME = "aufstellungen.json"
 DEFAULT_PATH = SCRIPT_DIR / AUFSTELLUNGEN_NAME
@@ -124,15 +123,6 @@ AMBIGUOUS_POSITIONS = {"AV": "LV oder RV"}
 UNKNOWN_ROW_Y = 0.5
 SPREAD = 0.22  # horizontal distance between players sharing a position code
 
-_FONT_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Regular.ttf"
-_FONT_BOLD_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Bold.ttf"
-if _FONT_PATH.exists():
-    pdfmetrics.registerFont(TTFont("NotoSans", str(_FONT_PATH)))
-if _FONT_BOLD_PATH.exists():
-    pdfmetrics.registerFont(TTFont("NotoSans-Bold", str(_FONT_BOLD_PATH)))
-FONT = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
-BOLD_FONT = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
-
 
 @dataclass
 class Starter:
@@ -178,26 +168,9 @@ class PlacedPlayer:
     y: float
 
 
-def esc(text: Any) -> str:
-    """HTML-escape a string for reportlab paragraphs."""
-    return htmllib.escape(str(text), quote=True)
-
-
 def german_date(d: date) -> str:
     """Render a date as 'Samstag, 2. Mai 2026'."""
     return f"{WEEKDAYS_DE[d.weekday()]}, {d.day}. {MONTHS_DE[d.month - 1]} {d.year}"
-
-
-def parse_iso_date(value: Any) -> date | None:
-    """Parse an ISO (2026-05-02) or German (02.05.2026) date string."""
-    if not isinstance(value, str):
-        return None
-    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
-        try:
-            return datetime.strptime(value.strip(), fmt).date()
-        except ValueError:
-            pass
-    return None
 
 
 def _str_list(value: Any) -> list[str]:
@@ -215,7 +188,7 @@ def normalize_entry(raw: Any, index: int) -> tuple[Lineup | None, list[str]]:
     team = str(raw.get("team", "")).strip()
     if not team:
         return None, [f"{where} ohne Team – übersprungen."]
-    d = parse_iso_date(raw.get("date"))
+    d = parse_date(raw.get("date"))
     if d is None:
         return None, [f"{where}: ungültiges Datum '{raw.get('date')}' – übersprungen."]
 
@@ -870,7 +843,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         ap.error("only --new is supported")
     if not args.team or not args.date:
         ap.error("--new requires --team and --date")
-    game_date = parse_iso_date(args.date)
+    game_date = parse_date(args.date)
     if game_date is None:
         ap.error(f"ungültiges Datum: {args.date}")
     path = DEFAULT_PATH

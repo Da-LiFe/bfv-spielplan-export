@@ -913,7 +913,7 @@ def handle_aufstellung(
         sys.exit("--aufstellung benötigt --team.")
     day = None
     if date_arg:
-        day = aufstellung.parse_iso_date(date_arg)
+        day = aufstellung.parse_date(date_arg)
         if day is None:
             sys.exit(f"Ungültiges Datum '{date_arg}' (erwartet YYYY-MM-DD).")
 

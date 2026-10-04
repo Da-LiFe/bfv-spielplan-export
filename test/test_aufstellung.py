@@ -211,9 +211,9 @@ def test_meeting_time():
     assert aufstellung.meeting_time("folgt") == ""
 
 
-def test_parse_iso_date_and_german_date():
-    assert aufstellung.parse_iso_date("2026-05-02") == date(2026, 5, 2)
-    assert aufstellung.parse_iso_date(None) is None
+def test_parse_date_and_german_date():
+    assert aufstellung.parse_date("2026-05-02") == date(2026, 5, 2)
+    assert aufstellung.parse_date(None) is None
     assert aufstellung.german_date(date(2026, 5, 2)) == "Samstag, 2. Mai 2026"
 
 
