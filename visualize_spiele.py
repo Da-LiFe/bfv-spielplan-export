@@ -29,7 +29,7 @@ import kapitane
 from config import (
     CLUB_MARKERS,
     CLUB_NAME,
-    CSV_DATE_FORMAT,
+    CSV_DATE_FORMAT,  # noqa: F401 (used by tests via vis.CSV_DATE_FORMAT)
     LINK_COLOR,
     PALETTE,
     SCRIPT_DIR,
@@ -49,6 +49,7 @@ from util import (
     esc,
     game_sort_key,
     maps_url,
+    match_team,
     parse_date,
     place_text,
 )
@@ -952,16 +953,14 @@ def handle_aufstellung(
             file=sys.stderr,
         )
 
-    assignments = kapitane.load_config(SCRIPT_DIR / kapitane.CONFIG_NAME)["assignments"]
     week = kapitane.duty_week(lineup.date)
-    captain = next(
-        (
-            assignments[name][week]
-            for name in (team, lineup.team)
-            if assignments.get(name, {}).get(week)
-        ),
-        "",
+    # Merge captain assignments across all name variants (alias, lineup team name)
+    cfg = kapitane.load_all(
+        SCRIPT_DIR / kapitane.CONFIG_NAME, SCRIPT_DIR / kapitane.ROSTER_NAME
     )
+    candidate_names = {team, lineup.team}
+    captain_by_week = kapitane.captains_for(cfg, candidate_names)
+    captain = captain_by_week.get(week, "")
 
     for warning in aufstellung.validate(lineup):
         print(f"Warnung: {warning}", file=sys.stderr)
@@ -1070,10 +1069,15 @@ def main(argv: list[str] | None = None) -> None:
         cfg = kapitane.load_all(
             SCRIPT_DIR / kapitane.CONFIG_NAME, SCRIPT_DIR / kapitane.ROSTER_NAME
         )
+        # Merge captain assignments across all name variants (alias, original, etc.)
+        candidate_names = {team}
+        for team_name in cfg.get("teams", {}):
+            if match_team([team_name], team):
+                candidate_names.add(team_name)
         captain_by_week = (
-            cfg["assignments"].get(team, {})
-            if team in cfg["teams"] or team in cfg["assignments"]
-            else None
+            kapitane.captains_for(cfg, candidate_names)
+            if candidate_names & set(cfg["assignments"])
+            else {}
         )
         build_team_pdf(
             next_games,

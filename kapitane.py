@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from config import SCRIPT_DIR, WD
-from util import load_json_lenient
+from util import load_json_lenient, match_team
 
 CONFIG_NAME = "kapitane.json"
 DEFAULT_CONFIG_PATH = SCRIPT_DIR / CONFIG_NAME
@@ -62,6 +62,22 @@ def week_range(week_key: str) -> str:
     )
 
 
+def captains_for(cfg: dict[str, Any], names: set[str]) -> dict[str, str]:
+    """Return week -> kid mapping merging all name variants of a team.
+
+    *names* should include every alias / original BFV name / lineup name that
+    refers to the same team.  Lookups are case-insensitive via ``match_team``.
+    """
+    merged: dict[str, str] = {}
+    assignments = cfg.get("assignments", {})
+    for name in names:
+        canonical = match_team(assignments.keys(), name)
+        if canonical:
+            week_assignments = assignments.get(canonical, {})
+            merged.update(week_assignments)
+    return merged
+
+
 def _parse_teams(raw_teams: dict) -> dict[str, list[Kid]]:
     """Normalise raw teams dict into team -> [Kid] (both old and new format)."""
     result: dict[str, list[Kid]] = {}
@@ -101,8 +117,7 @@ def load_roster(path: Path | None = None) -> dict[str, list[str]]:
     Convenience wrapper around ``load_roster_entries`` that returns only names.
     """
     return {
-        team: [k.name for k in kids]
-        for team, kids in load_roster_entries(path).items()
+        team: [k.name for k in kids] for team, kids in load_roster_entries(path).items()
     }
 
 
