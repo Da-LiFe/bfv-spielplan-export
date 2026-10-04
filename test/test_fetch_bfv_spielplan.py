@@ -317,18 +317,31 @@ def test_refresh_all_teams(tmp_path, monkeypatch, capsys):
     def fake_fetch_one(url):
         return Path(f"{url.split('/')[-2]}_spiele_web.csv"), 5
 
-    def fake_run(*args, **kwargs):
-        calls.append((args, kwargs))
+    def fake_load_games():
+        return ([], [], [])
+
+    def fake_group_by_day(games):
+        return {}
+
+    def fake_build_html(*args, **kwargs):
+        calls.append(("build_html", args, kwargs))
+
+    def fake_build_pdf(*args, **kwargs):
+        calls.append(("build_pdf", args, kwargs))
 
     monkeypatch.setattr(fetch, "fetch_one", fake_fetch_one)
-    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr("games.load_games", fake_load_games)
+    monkeypatch.setattr("games.group_by_day", fake_group_by_day)
+    monkeypatch.setattr("render_html.build_html", fake_build_html)
+    monkeypatch.setattr("pdf_overview.build_pdf", fake_build_pdf)
     fetch.refresh(teams_file)
     out = capsys.readouterr().out
     assert out.count("Wrote 5 matches to ") == 2
     assert "Total: 10 matches" in out
-    assert len(calls) == 1
-    assert calls[0][1]["check"] is True
-    assert calls[0][1]["timeout"] == 120
+    assert "Regenerated" in out
+    assert len(calls) == 2
+    assert calls[0][0] == "build_html"
+    assert calls[1][0] == "build_pdf"
 
 
 def test_refresh_continues_on_error(tmp_path, monkeypatch, capsys):

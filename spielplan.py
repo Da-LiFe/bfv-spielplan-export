@@ -57,6 +57,7 @@ def cmd_overview(args: argparse.Namespace) -> int:
 
 def cmd_team(args: argparse.Namespace) -> int:
     """Generate a team-specific PDF for upcoming games."""
+    import kapitane
     from games import load_games, next_games_for_team, resolve_team, slugify
     from pdf_team import build_team_pdf
 
@@ -69,7 +70,24 @@ def cmd_team(args: argparse.Namespace) -> int:
         return 1
     slug = slugify(team)
     out_path = args.out or SCRIPT_DIR / f"{slug}_spiele.pdf"
-    build_team_pdf(next_games, team, sources, out_path, args.next)
+
+    # Compute captain assignments using the shared lookup
+    cfg = kapitane.load_all(
+        SCRIPT_DIR / kapitane.CONFIG_NAME, SCRIPT_DIR / kapitane.ROSTER_NAME
+    )
+    candidate_names = {team}
+    from util import match_team
+
+    for team_name in cfg.teams:
+        if match_team([team_name], team):
+            candidate_names.add(team_name)
+    captain_by_week = (
+        kapitane.captains_for(cfg, candidate_names)
+        if candidate_names & set(cfg.assignments)
+        else {}
+    )
+
+    build_team_pdf(next_games, team, sources, out_path, args.next, captain_by_week)
     print(f"{args.next} kommende Spiele für {team}")
     print(f"PDF: {out_path}")
     return 0

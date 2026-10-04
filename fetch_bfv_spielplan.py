@@ -363,12 +363,18 @@ def fetch_all(teams: list[dict]) -> int:
 
 
 def regenerate_html(script_dir: Path) -> None:
-    """Run visualize_spiele.py if any CSV files exist."""
-    visualize = script_dir / "visualize_spiele.py"
-    if visualize.exists():
-        import subprocess
+    """Regenerate the HTML overview and PDF from existing CSV files."""
+    from games import group_by_day, load_games
+    from pdf_overview import build_pdf
+    from render_html import build_html
 
-        subprocess.run([sys.executable, str(visualize)], check=True, timeout=120)
+    games, club_teams, sources = load_games()
+    days = group_by_day(games)
+    html_path = script_dir / "spielplan.html"
+    pdf_path = script_dir / "spielplan.pdf"
+    build_html(days, club_teams, sources, html_path)
+    build_pdf(days, pdf_path)
+    print(f"Regenerated {html_path} and {pdf_path}", flush=True)
 
 
 def refresh(teams_path: Path) -> None:
