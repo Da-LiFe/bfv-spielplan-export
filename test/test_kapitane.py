@@ -1,8 +1,8 @@
 import json
 from datetime import date, timedelta
 
+import config
 import kapitane
-import visualize_spiele as vis
 
 TG = "TSV Gilching/Argelsried u13-2"
 
@@ -11,8 +11,8 @@ def make_game(days, heim, gast):
     d = date.today() + timedelta(days=days)
     return {
         "date": d,
-        "datum": d.strftime(vis.CSV_DATE_FORMAT),
-        "wd": vis.WD[d.weekday()],
+        "datum": d.strftime(config.CSV_DATE_FORMAT),
+        "wd": config.WD[d.weekday()],
         "time": "10:00",
         "heim": heim,
         "gast": gast,

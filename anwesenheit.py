@@ -29,6 +29,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 import aufstellung
 import kapitane
 from config import CSV_DATE_FORMAT, SCRIPT_DIR
+from games import slugify
 from pdf_common import (
     BOLD_FONT,
     CONTENT_WIDTH,
@@ -431,73 +432,80 @@ def build_anwesenheit_pdf(
     return list(teams)
 
 
-def cli_main(argv: list[str] | None = None) -> int:
-    """Standalone CLI for scaffolding a new training session entry."""
-    ap = argparse.ArgumentParser(
-        description="Training attendance evaluation and session scaffolding."
-    )
-    ap.add_argument(
-        "--new",
-        action="store_true",
-        help="Scaffold a new session entry in anwesenheit.json for a team and "
-        "date, pre-filling every roster player with status N",
-    )
-    ap.add_argument(
-        "--team",
-        default=None,
-        help="Team alias/name (must match a key in roster.json for --new)",
-    )
-    ap.add_argument(
-        "--date",
-        default=None,
-        help="Session date as 2026-09-21 or 21.09.2026 (required with --new)",
-    )
-    ap.add_argument(
-        "--file",
-        default=None,
-        help="Path to anwesenheit.json (default: <script_dir>/anwesenheit.json)",
-    )
-    args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+def run_report(
+    team: str | None = None,
+    out: str | Path | None = None,
+    combined: bool = False,
+    path: str | Path | None = None,
+) -> int:
+    """``spielplan.py anwesenheit``: render the attendance evaluation PDF."""
+    data = load_data(Path(path) if path else SCRIPT_DIR / ANWESENHEIT_NAME)
+    sessions = data["sessions"]
+    if team:
+        teams = sorted({s["team"] for s in sessions})
+        if team not in teams:
+            sys.exit(
+                f"Team '{team}' nicht gefunden. Verf\u00fcgbare Teams: "
+                f"{', '.join(teams) or 'keine'}"
+            )
+        sessions = [s for s in sessions if s["team"] == team]
+        pdf_name = f"{slugify(team)}_anwesenheit.pdf"
+    else:
+        pdf_name = PDF_NAME
+    out_path = Path(out) if out else SCRIPT_DIR / pdf_name
+    teams_rendered = build_anwesenheit_pdf(sessions, out_path, combined)
+    print(f"{len(sessions)} Trainingstermine aus {len(teams_rendered)} Team(s)")
+    print(f"PDF:  {out_path}")
+    return 0
 
-    if not args.new:
-        ap.error("only --new is supported")
-    if not args.team or not args.date:
-        ap.error("--new requires --team and --date")
-    d = parse_date(args.date)
-    if d is None:
-        ap.error(f"ungültiges Datum: {args.date}")
-    path = Path(args.file) if args.file else DEFAULT_PATH
 
+def scaffold_session(team: str, day: date, path: str | Path | None = None) -> int:
+    """``spielplan.py anwesenheit --new``: add a session with every player 'N'."""
+    data_path = Path(path) if path else SCRIPT_DIR / ANWESENHEIT_NAME
     roster = kapitane.load_roster()
-    players = roster.get(args.team, [])
-    data = load_data(path)
-    if session_exists(data["sessions"], args.team, d):
+    players = roster.get(team, [])
+    data = load_data(data_path)
+    if session_exists(data["sessions"], team, day):
         print(
-            f"Warnung: Eintrag für '{args.team}' am {d.strftime(CSV_DATE_FORMAT)} "
-            "existiert bereits – nicht angelegt.",
+            f"Warnung: Eintrag f\u00fcr '{team}' am {day.strftime(CSV_DATE_FORMAT)} "
+            "existiert bereits \u2013 nicht angelegt.",
             file=sys.stderr,
         )
         return 1
-    data["sessions"].append(new_session(args.team, d, players))
-    save_data(data["sessions"], path)
+    data["sessions"].append(new_session(team, day, players))
+    save_data(data["sessions"], data_path)
     print(
-        f"Anwesenheit: {args.team} am {d.strftime(CSV_DATE_FORMAT)} – "
+        f"Anwesenheit: {team} am {day.strftime(CSV_DATE_FORMAT)} \u2013 "
         f"{len(players)} Spieler (alle 'N')."
     )
     if not players:
         print(
-            f"Warnung: Kein Kader für '{args.team}' in {kapitane.ROSTER_NAME} "
-            "– Eintrag ohne Spieler angelegt.",
+            f"Warnung: Kein Kader f\u00fcr '{team}' in {kapitane.ROSTER_NAME} "
+            "\u2013 Eintrag ohne Spieler angelegt.",
             file=sys.stderr,
         )
     return 0
 
 
-if __name__ == "__main__":
-    import sys
+def legacy_argv(argv: list[str]) -> list[str]:
+    """Translate an old ``anwesenheit.py`` call into ``spielplan.py`` arguments."""
+    ap = argparse.ArgumentParser(prog="anwesenheit.py")
+    ap.add_argument("--new", action="store_true")
+    ap.add_argument("--team", default=None)
+    ap.add_argument("--date", default=None)
+    ap.add_argument("--file", default=None)
+    args = ap.parse_args(argv)
+    if not args.new:
+        ap.error("only --new is supported")
+    if not args.team or not args.date:
+        ap.error("--new requires --team and --date")
+    new = ["anwesenheit", "--new", "--team", args.team, "--date", args.date]
+    if args.file:
+        new += ["--file", args.file]
+    return new
 
+
+if __name__ == "__main__":
     import spielplan
 
-    # anwesenheit.py only supports --new (and --team, --date, --file, --out)
-    # These map directly to spielplan.py anwesenheit
-    sys.exit(spielplan._deprecate("anwesenheit.py", "anwesenheit", sys.argv[1:]))
+    sys.exit(spielplan.deprecated("anwesenheit.py", legacy_argv(sys.argv[1:])))

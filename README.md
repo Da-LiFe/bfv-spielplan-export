@@ -38,7 +38,7 @@ python3 spielplan.py fetch --refresh
 python3 spielplan.py fetch <bfv-url>
 
 # Fetch a single team to a specific file
-python3 spielplan.py fetch <bfv-url> --output <output.csv>
+python3 spielplan.py fetch <bfv-url> <output.csv>
 
 # Use a teams file in a different location
 python3 spielplan.py fetch --refresh --teams /path/to/teams.json
@@ -93,8 +93,9 @@ python3 spielplan.py captains --check
 | `anwesenheit.py --new --team X --date D` | `spielplan.py anwesenheit --new --team X --date D` |
 
 Old entry points (`visualize_spiele.py`, `fetch_bfv_spielplan.py`,
-`aufstellung.py`, `anwesenheit.py`) still work but print a deprecation notice
-to stderr and forward to `spielplan.py`.
+`aufstellung.py`, `anwesenheit.py`) still work: they print one deprecation
+line to stderr, run the matching `spielplan.py` command and return its exit
+code.
 
 ### Team configuration (`teams.json`)
 
@@ -154,7 +155,7 @@ Old flat format (`["Lena", "Max", "Noah"]`) is still supported for reading —
 `save_roster` always writes the new structured format.
 
 - `kapitane.json` — the week→kid assignments (created/filled by
-  `--captains-assign`, individual weeks stay hand-editable):
+  `captains --assign`, individual weeks stay hand-editable):
 
 ```json
 {
@@ -164,17 +165,19 @@ Old flat format (`["Lena", "Max", "Noah"]`) is still supported for reading —
 }
 ```
 
-- `--captains-assign` loads the current CSVs and fills any duty week that has an
+- `captains --assign` loads the current CSVs and fills any duty week that has an
   upcoming game but no captain yet — round-robin, always giving the week to the
   kid with the fewest appointments (fair by construction). Weeks you filled by
   hand are never overwritten.
-- `--captains-check` counts, per team, how many weeks each kid is on duty (only
+- `captains --check` counts, per team, how many weeks each kid is on duty (only
   weeks with an actual game count) and reports `gleichmäßig` when no kid has more
   than one duty week more than another. It flags missing assignments, kids not in
   the roster and missing rosters, and exits with code 1 when anything is off.
-- The `--team` PDF then shows the captain on each game card:
+- The `team` PDF then shows the captain on each game card:
   `Kapitän der Woche · Lena · Mo 07.09. – So 13.09.` A configured team without an
-  assignment shows `Kapitän der Woche · folgt` until `--captains-assign` is run.
+  assignment shows `Kapitän der Woche · folgt` until `captains --assign` is run.
+  `team` and `aufstellung` find assignments stored under the alias or the
+  original BFV name (case-insensitive).
 
 ### Training attendance (Anwesenheit)
 
@@ -297,16 +300,16 @@ new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
 - `spielplan.pdf` — printable multi-page overview
 - `<slug>_spiele.pdf` — single-team overview of the next games (from `team`)
 - `kapitane.json` / `roster.json` — Kapitän duty assignments and team rosters
-  (from `--captains-assign`, kid names stay local)
-- `anwesenheit.pdf` — training attendance evaluation (from `--anwesenheit`,
+  (from `captains --assign`, kid names stay local)
+- `anwesenheit.pdf` — training attendance evaluation (from `anwesenheit`,
   `anwesenheit.json` is the hand-maintained source data)
 - `<slug>_aufstellung_<date>.pdf` — lineup sheet of one game (from
-  `--aufstellung`, `aufstellungen.json` is the hand-maintained source data)
+  `aufstellung`, `aufstellungen.json` is the hand-maintained source data)
 
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest -v   # Python unit tests (214)
+.venv/bin/python -m pytest -v   # Python tests
 node test/spielplan.test.mjs    # JS harness for the embedded filter/export code (needs Node >= 18)
 ```
 
@@ -315,14 +318,14 @@ node test/spielplan.test.mjs    # JS harness for the embedded filter/export code
 - `spielplan.py` — unified CLI entry point (subcommands: fetch, overview, team, aufstellung, anwesenheit, captains)
 - `config.py` — shared constants (`CLUB_MARKERS`, `PALETTE`, date format, …)
 - `util.py` — shared helpers (location formatting, map links)
-- `games.py` — game loading, parsing, deduplication, grouping
+- `games.py` — game loading, parsing, deduplication of club-internal games, grouping
 - `render_html.py` — HTML overview page generation
-- `pdf_overview.py` — multi-page overview PDF generation
-- `pdf_team.py` — single-team PDF generation
-- `fetch_bfv_spielplan.py` — BFV fetcher (deprecated; forwards to `spielplan.py fetch`)
-- `visualize_spiele.py` — HTML/PDF generator (deprecated; forwards to `spielplan.py`)
-- `anwesenheit.py` — training attendance data, stats, PDF and `--new` scaffolding (deprecated; forwards to `spielplan.py anwesenheit`)
-- `aufstellung.py` — lineup data, validation, pitch placement and lineup PDF (deprecated; forwards to `spielplan.py aufstellung`)
-- `kapitane.py` — captain assignment logic and roster loading
+- `pdf_overview.py` — `overview` command and the multi-page overview PDF
+- `pdf_team.py` — `team` command and the single-team PDF
+- `fetch_bfv_spielplan.py` — BFV fetcher, `fetch` command (running it directly is deprecated)
+- `visualize_spiele.py` — deprecated wrapper: maps the old options to `spielplan.py` commands
+- `anwesenheit.py` — `anwesenheit` command: attendance data, stats, PDF and `--new` scaffolding (running it directly is deprecated)
+- `aufstellung.py` — `aufstellung` command: lineup data, validation, pitch placement, lineup PDF and `--new` scaffolding (running it directly is deprecated)
+- `kapitane.py` — `captains` command, captain assignment logic and roster loading
 - `teams.json` — team config: BFV URLs and optional display aliases
 - `reports/` — project reports (history and design decisions)

@@ -15,7 +15,7 @@ from pdfminer.pdftypes import resolve1
 import aufstellung
 import games
 import kapitane
-import pdf_team
+import spielplan
 import visualize_spiele as vis
 
 TEAM = "TSV Gilching/Argelsried U8"
@@ -589,13 +589,10 @@ def test_build_lineup_pdf_away_single_page(tmp_path):
 
 
 @pytest.fixture
-def cli_env(tmp_path, monkeypatch):
-    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
-    monkeypatch.setattr(games, "SCRIPT_DIR", tmp_path)
-    monkeypatch.setattr(pdf_team, "SCRIPT_DIR", tmp_path)
+def cli_env(script_dir, monkeypatch):
     monkeypatch.setattr(aufstellung, "_download", lambda url: PNG)
     monkeypatch.setattr(aufstellung, "get_logo", lambda **kw: None)
-    return tmp_path
+    return script_dir
 
 
 def write_lineups(path, *games):
@@ -690,14 +687,14 @@ def test_find_team_game_prefers_earliest():
     from datetime import datetime
 
     d = datetime(2026, 5, 2)
-    games = [
+    game_list = [
         {"heim": TEAM, "gast": "B", "date": d, "time": "14:00"},
         {"heim": "A", "gast": TEAM, "date": d, "time": ""},
         {"heim": "A", "gast": TEAM, "date": d, "time": "09:00"},
         {"heim": "X", "gast": "Y", "date": d, "time": "08:00"},
     ]
-    assert vis.find_team_game(games, TEAM, d)["time"] == "09:00"
-    assert vis.find_team_game(games, "Z", d) is None
+    assert games.find_team_game(game_list, TEAM, d)["time"] == "09:00"
+    assert games.find_team_game(game_list, "Z", d) is None
 
 
 def test_save_lineups_roundtrip(tmp_path):
@@ -815,8 +812,8 @@ def test_cli_new_writes_entry(tmp_path, monkeypatch, capsys):
     )
     monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
     out = tmp_path / "aufstellungen.json"
-    monkeypatch.setattr(aufstellung, "DEFAULT_PATH", out)
-    rc = aufstellung.cli_main(["--new", "--team", TEAM, "--date", "2026-05-02"])
+    monkeypatch.setattr(aufstellung, "SCRIPT_DIR", tmp_path)
+    rc = spielplan.main(["aufstellung", TEAM, "--new", "--date", "2026-05-02"])
     assert rc == 0
     data = json.loads(out.read_text(encoding="utf-8"))
     assert len(data["spiele"]) == 1
@@ -841,8 +838,8 @@ def test_cli_new_duplicate_skips(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
     out = tmp_path / "aufstellungen.json"
     aufstellung.save_lineups([make_lineup(day="2026-05-02")], out)
-    monkeypatch.setattr(aufstellung, "DEFAULT_PATH", out)
-    rc = aufstellung.cli_main(["--new", "--team", TEAM, "--date", "2026-05-02"])
+    monkeypatch.setattr(aufstellung, "SCRIPT_DIR", tmp_path)
+    rc = spielplan.main(["aufstellung", TEAM, "--new", "--date", "2026-05-02"])
     assert rc == 0
     data = json.loads(out.read_text(encoding="utf-8"))
     assert len(data["spiele"]) == 1
@@ -857,19 +854,19 @@ def test_cli_new_missing_roster(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
     with pytest.raises(SystemExit) as exc:
-        aufstellung.cli_main(["--new", "--team", TEAM, "--date", "2026-05-02"])
+        spielplan.main(["aufstellung", TEAM, "--new", "--date", "2026-05-02"])
     assert "Kein Kader" in str(exc.value)
 
 
 def test_cli_new_invalid_date(capsys):
     with pytest.raises(SystemExit):
-        aufstellung.cli_main(["--new", "--team", TEAM, "--date", "morgen"])
+        spielplan.main(["aufstellung", TEAM, "--new", "--date", "morgen"])
     captured = capsys.readouterr()
     assert "ungültiges Datum" in captured.err
 
 
 def test_cli_new_missing_args(capsys):
     with pytest.raises(SystemExit):
-        aufstellung.cli_main(["--new", "--team", TEAM])
+        spielplan.main(["aufstellung", TEAM, "--new"])
     captured = capsys.readouterr()
-    assert "--new requires --team and --date" in captured.err
+    assert "--new braucht --date" in captured.err

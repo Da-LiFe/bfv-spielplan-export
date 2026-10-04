@@ -7,6 +7,7 @@ from reportlab.lib.units import mm
 
 import anwesenheit
 import kapitane
+import spielplan
 
 PlayerStats = anwesenheit.PlayerStats
 
@@ -173,8 +174,17 @@ def test_cli_new_writes_entry(tmp_path, monkeypatch, capsys):
     roster.write_text(json.dumps({"teams": {TG: ["Lena", "Max", "Noah"]}}))
     monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
     out = tmp_path / "anwesenheit.json"
-    rc = anwesenheit.cli_main(
-        ["--new", "--team", TG, "--date", "2026-09-21", "--file", str(out)]
+    rc = spielplan.main(
+        [
+            "anwesenheit",
+            "--new",
+            "--team",
+            TG,
+            "--date",
+            "2026-09-21",
+            "--file",
+            str(out),
+        ]
     )
     assert rc == 0
     data = json.loads(out.read_text(encoding="utf-8"))
@@ -191,8 +201,17 @@ def test_cli_new_writes_entry(tmp_path, monkeypatch, capsys):
 
 def test_cli_new_accepts_german_date(tmp_path, monkeypatch):
     out = tmp_path / "anwesenheit.json"
-    rc = anwesenheit.cli_main(
-        ["--new", "--team", TG, "--date", "21.09.2026", "--file", str(out)]
+    rc = spielplan.main(
+        [
+            "anwesenheit",
+            "--new",
+            "--team",
+            TG,
+            "--date",
+            "21.09.2026",
+            "--file",
+            str(out),
+        ]
     )
     assert rc == 0
     data = json.loads(out.read_text(encoding="utf-8"))
@@ -204,8 +223,17 @@ def test_cli_new_unknown_team_warns_stderr(tmp_path, monkeypatch, capsys):
     roster.write_text(json.dumps({"teams": {TG2: ["Emma"]}}))
     monkeypatch.setattr(kapitane, "DEFAULT_ROSTER_PATH", roster)
     out = tmp_path / "anwesenheit.json"
-    rc = anwesenheit.cli_main(
-        ["--new", "--team", TG, "--date", "2026-09-21", "--file", str(out)]
+    rc = spielplan.main(
+        [
+            "anwesenheit",
+            "--new",
+            "--team",
+            TG,
+            "--date",
+            "2026-09-21",
+            "--file",
+            str(out),
+        ]
     )
     assert rc == 0
     err = capsys.readouterr().err
@@ -219,8 +247,17 @@ def test_cli_new_duplicate_skips(tmp_path, monkeypatch, capsys):
     anwesenheit.save_data(
         [{"date": date(2026, 9, 21), "team": TG, "values": {"Lena": "P"}}], out
     )
-    rc = anwesenheit.cli_main(
-        ["--new", "--team", TG, "--date", "2026-09-21", "--file", str(out)]
+    rc = spielplan.main(
+        [
+            "anwesenheit",
+            "--new",
+            "--team",
+            TG,
+            "--date",
+            "2026-09-21",
+            "--file",
+            str(out),
+        ]
     )
     assert rc == 1
     assert "existiert bereits" in capsys.readouterr().err
@@ -232,13 +269,13 @@ def test_cli_new_duplicate_skips(tmp_path, monkeypatch, capsys):
 
 def test_cli_new_missing_args():
     with pytest.raises(SystemExit) as exc:
-        anwesenheit.cli_main(["--new", "--team", TG])
+        spielplan.main(["anwesenheit", "--new", "--team", TG])
     assert exc.value.code == 2
 
 
 def test_cli_new_invalid_date():
     with pytest.raises(SystemExit) as exc:
-        anwesenheit.cli_main(["--new", "--team", TG, "--date", "kaputt"])
+        spielplan.main(["anwesenheit", "--new", "--team", TG, "--date", "kaputt"])
     assert exc.value.code == 2
 
 

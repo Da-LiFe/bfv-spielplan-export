@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from config import SCRIPT_DIR, WD
-from games import Game, Source
+from games import Game, Source, load_games
 from util import load_json_lenient, match_team
 
 CONFIG_NAME = "kapitane.json"
@@ -358,3 +358,34 @@ def run_check(result: CheckResult, path: Path | None = None) -> None:
         cfg_path = path or DEFAULT_CONFIG_PATH
         print(f"\nNicht gleichmäßig – bitte {cfg_path} korrigieren.")
         sys.exit(1)
+
+
+def update_and_report(
+    games: list[Game], sources: list[Source], assign: bool, check: bool
+) -> None:
+    """Fill (``assign``) and print or verify (``check``) the duty distribution."""
+    cfg_path = SCRIPT_DIR / CONFIG_NAME
+    cfg = load_all(cfg_path, SCRIPT_DIR / ROSTER_NAME)
+    weeks = teams_duty_weeks(games, sources)
+    if assign:
+        warnings = ensure_assignments(cfg, weeks)
+        save_config(cfg, cfg_path)
+        print(f"{ROSTER_NAME} / {CONFIG_NAME} aktualisiert.")
+        for warning in warnings:
+            print(f"Warnung: {warning}", file=sys.stderr)
+        print()
+    result = check_distribution(cfg, weeks)
+    if check:
+        run_check(result, cfg_path)
+    else:
+        for line in result.lines:
+            print(line)
+
+
+def run_captains(assign: bool = False, check: bool = False) -> int:
+    """``spielplan.py captains``: assign and/or check captains for all teams."""
+    games, _, sources = load_games()
+    if not games:
+        sys.exit("Keine *_spiele_web.csv Dateien gefunden.")
+    update_and_report(games, sources, assign, check)
+    return 0

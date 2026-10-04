@@ -1,10 +1,12 @@
-"""PDF overview of all games.
+"""Overview of all games: the HTML page and the multi-page PDF.
 
-Produces a multi-page PDF listing every game grouped by date.
+``run_overview`` is the ``spielplan.py overview`` command; ``build_pdf``
+produces the PDF listing every game grouped by date.
 """
 
 from __future__ import annotations
 
+import sys
 from collections import OrderedDict
 from pathlib import Path
 
@@ -16,7 +18,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 import aufstellung
 from config import CLUB_NAME, SCRIPT_DIR
-from games import Game, short_place
+from games import Game, group_by_day, load_games, short_place
 from pdf_common import (
     BOLD_FONT,
     CONTENT_WIDTH,
@@ -24,6 +26,7 @@ from pdf_common import (
     LINK_COLOR,
     PAGE_MARGIN,
 )
+from render_html import build_html
 from util import esc
 
 
@@ -159,3 +162,19 @@ def build_pdf(days: OrderedDict[str, list[Game]], out_path: Path) -> None:
         bottomMargin=14 * mm,
         title=f"Spielplan \u2013 {CLUB_NAME}",
     ).build(story)
+
+
+def run_overview() -> int:
+    """Write ``spielplan.html`` and ``spielplan.pdf`` from all game CSVs."""
+    games, club_teams, sources = load_games()
+    if not games:
+        sys.exit("Keine *_spiele_web.csv Dateien gefunden.")
+    days = group_by_day(games)
+    html_path = SCRIPT_DIR / "spielplan.html"
+    pdf_path = SCRIPT_DIR / "spielplan.pdf"
+    build_html(days, club_teams, sources, html_path)
+    build_pdf(days, pdf_path)
+    print(f"{len(games)} Spiele aus {len({g['source'] for g in games})} Dateien")
+    print(f"HTML: {html_path}")
+    print(f"PDF:  {pdf_path}")
+    return 0

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import csv
 import hashlib
 import html as htmllib
@@ -362,19 +361,11 @@ def fetch_all(teams: list[dict]) -> int:
     return total
 
 
-def regenerate_html(script_dir: Path) -> None:
-    """Regenerate the HTML overview and PDF from existing CSV files."""
-    from games import group_by_day, load_games
-    from pdf_overview import build_pdf
-    from render_html import build_html
+def regenerate_html() -> None:
+    """Regenerate the HTML/PDF overview from the CSV files (no subprocess)."""
+    import pdf_overview
 
-    games, club_teams, sources = load_games()
-    days = group_by_day(games)
-    html_path = script_dir / "spielplan.html"
-    pdf_path = script_dir / "spielplan.pdf"
-    build_html(days, club_teams, sources, html_path)
-    build_pdf(days, pdf_path)
-    print(f"Regenerated {html_path} and {pdf_path}", flush=True)
+    pdf_overview.run_overview()
 
 
 def refresh(teams_path: Path) -> None:
@@ -382,58 +373,36 @@ def refresh(teams_path: Path) -> None:
     teams = load_teams(teams_path)
     total = fetch_all(teams)
     if total:
-        regenerate_html(SCRIPT_DIR)
+        regenerate_html()
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: fetch a single team or refresh all teams."""
-    ap = argparse.ArgumentParser(
-        description="Fetch a BFV team's full match schedule and write a CSV."
-    )
-    ap.add_argument(
-        "url",
-        nargs="?",
-        help="BFV team page URL, e.g. https://www.bfv.de/mannschaften/...",
-    )
-    ap.add_argument(
-        "output", nargs="?", help="Output CSV path (default: <slug>_spiele_web.csv)"
-    )
-    ap.add_argument(
-        "--refresh",
-        action="store_true",
-        help="Re-fetch all teams listed in teams.json and regenerate the overview",
-    )
-    ap.add_argument(
-        "--teams",
-        default=None,
-        help="Path to teams JSON file (default: teams.json next to this script)",
-    )
-    args = ap.parse_args(argv)
-
-    if args.refresh:
-        refresh(Path(args.teams) if args.teams else SCRIPT_DIR / "teams.json")
+def run_fetch(
+    url: str | None = None,
+    output: str | None = None,
+    refresh_all: bool = False,
+    teams: str | None = None,
+) -> int:
+    """``spielplan.py fetch``: fetch one team (``url``) or all teams (``refresh_all``)."""
+    teams_path = Path(teams) if teams else SCRIPT_DIR / "teams.json"
+    if refresh_all:
+        refresh(teams_path)
         return 0
-    if not args.url:
-        ap.error("URL or --refresh is required")
-
-    teams_path = Path(args.teams) if args.teams else SCRIPT_DIR / "teams.json"
-
+    if not url:
+        sys.exit("URL oder --refresh angeben.")
     try:
-        out_path, n = fetch_one(args.url, teams_path)
+        out_path, n = fetch_one(url, teams_path)
     except Exception as exc:
         sys.exit(f"Error fetching data: {exc}")
-    if args.output:
+    if output:
         fetched = out_path
-        out_path = Path(args.output)
+        out_path = Path(output)
         out_path.write_bytes(fetched.read_bytes())
-
     print(f"Wrote {n} matches to {out_path}")
     return 0
 
 
 if __name__ == "__main__":
-    import sys
-
     import spielplan
 
-    sys.exit(spielplan._deprecate("fetch_bfv_spielplan.py", "fetch", sys.argv[1:]))
+    # The old options are identical to ``spielplan.py fetch``.
+    sys.exit(spielplan.deprecated("fetch_bfv_spielplan.py", ["fetch", *sys.argv[1:]]))

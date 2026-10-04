@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import fetch_bfv_spielplan as fetch
+import pdf_overview
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -211,12 +212,6 @@ def test_fetch_all_matches_honours_max_iter(monkeypatch):
 # ---------------------------------------------------------------- fetch_one()
 
 
-@pytest.fixture(autouse=True)
-def _tmp_data(script_dir):
-    """CSVs and the overview are written next to the scripts: keep them out of the repo."""
-    return script_dir
-
-
 FAKE_ROWS = [
     {
         "Wettbewerb": "U15 Kreis",
@@ -315,39 +310,33 @@ def test_load_teams_invalid_json(tmp_path):
         fetch.load_teams(teams_file)
 
 
-def test_refresh_all_teams(tmp_path, monkeypatch, capsys):
+@pytest.fixture(autouse=True)
+def _tmp_data(script_dir):
+    """CSVs are written next to the scripts: keep them out of the repo."""
+    return script_dir
+
+
+@pytest.fixture(autouse=True)
+def overview_calls(monkeypatch):
+    """Record overview regenerations instead of writing spielplan.html/pdf."""
+    calls = []
+    monkeypatch.setattr(pdf_overview, "run_overview", lambda: calls.append(1) or 0)
+    return calls
+
+
+def test_refresh_all_teams(tmp_path, monkeypatch, capsys, overview_calls):
     teams_file = tmp_path / "teams.json"
     teams_file.write_text(json.dumps(TEAMS_JSON), encoding="utf-8")
-    calls = []
 
     def fake_fetch_one(url):
         return Path(f"{url.split('/')[-2]}_spiele_web.csv"), 5
 
-    def fake_load_games():
-        return ([], [], [])
-
-    def fake_group_by_day(games):
-        return {}
-
-    def fake_build_html(*args, **kwargs):
-        calls.append(("build_html", args, kwargs))
-
-    def fake_build_pdf(*args, **kwargs):
-        calls.append(("build_pdf", args, kwargs))
-
     monkeypatch.setattr(fetch, "fetch_one", fake_fetch_one)
-    monkeypatch.setattr("games.load_games", fake_load_games)
-    monkeypatch.setattr("games.group_by_day", fake_group_by_day)
-    monkeypatch.setattr("render_html.build_html", fake_build_html)
-    monkeypatch.setattr("pdf_overview.build_pdf", fake_build_pdf)
     fetch.refresh(teams_file)
     out = capsys.readouterr().out
     assert out.count("Wrote 5 matches to ") == 2
     assert "Total: 10 matches" in out
-    assert "Regenerated" in out
-    assert len(calls) == 2
-    assert calls[0][0] == "build_html"
-    assert calls[1][0] == "build_pdf"
+    assert overview_calls == [1]  # called in-process, once
 
 
 def test_refresh_continues_on_error(tmp_path, monkeypatch, capsys):
@@ -362,7 +351,6 @@ def test_refresh_continues_on_error(tmp_path, monkeypatch, capsys):
             else (Path("a.csv"), 5)
         ),
     )
-    monkeypatch.setattr("subprocess.run", lambda *a, **k: None)
     fetch.refresh(teams_file)
     out = capsys.readouterr().out
     assert "FEHLER:" in out
@@ -382,12 +370,15 @@ def test_refresh_no_urls(tmp_path):
         fetch.refresh(teams_file)
 
 
-def test_refresh_skips_visualize_if_missing(tmp_path, monkeypatch, capsys):
+def test_refresh_without_matches_skips_overview(
+    tmp_path, monkeypatch, capsys, overview_calls
+):
     teams_file = tmp_path / "teams.json"
     teams_file.write_text(json.dumps([{"url": TEAM_URL}]), encoding="utf-8")
-    monkeypatch.setattr(fetch, "fetch_one", lambda url: (Path("a.csv"), 1))
+    monkeypatch.setattr(fetch, "fetch_one", lambda url: (Path("a.csv"), 0))
     fetch.refresh(teams_file)
-    assert "Total: 1 matches" in capsys.readouterr().out
+    assert "Total: 0 matches" in capsys.readouterr().out
+    assert overview_calls == []
 
 
 # --------------------------------------------------------------- cache()
@@ -481,17 +472,39 @@ def test_fetch_url_error(monkeypatch):
 # ------------------------------------------------------------------- main()
 
 
-def test_main_requires_url_or_refresh(monkeypatch):
-    monkeypatch.setattr("sys.argv", ["fetch_bfv_spielplan.py"])
-    with pytest.raises(SystemExit):
-        fetch.main()
+def test_run_fetch_requires_url_or_refresh():
+    with pytest.raises(SystemExit, match="URL oder --refresh"):
+        fetch.run_fetch()
 
 
-def test_main_single_url(tmp_path, monkeypatch, capsys):
+def test_run_fetch_single_url(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(fetch, "fetch_all_matches", lambda team_id: FAKE_ROWS)
-    monkeypatch.setattr("sys.argv", ["fetch_bfv_spielplan.py", TEAM_URL])
-    fetch.main()
-    out = capsys.readouterr().out
-    assert "Wrote 2 matches to" in out
-    csv_name = "tsv-gilching-argelsried-2-7_spiele_web.csv"
-    assert (fetch.SCRIPT_DIR / csv_name).exists()
+    assert fetch.run_fetch(TEAM_URL, teams=str(tmp_path / "teams.json")) == 0
+    assert "Wrote 2 matches to" in capsys.readouterr().out
+    assert (tmp_path / "tsv-gilching-argelsried-2-7_spiele_web.csv").exists()
+
+
+def test_run_fetch_output_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(fetch, "fetch_all_matches", lambda team_id: FAKE_ROWS)
+    copy = tmp_path / "copy.csv"
+    fetch.run_fetch(TEAM_URL, str(copy), teams=str(tmp_path / "teams.json"))
+    assert (
+        copy.read_bytes()
+        == (tmp_path / "tsv-gilching-argelsried-2-7_spiele_web.csv").read_bytes()
+    )
+
+
+def test_run_fetch_refresh(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(fetch, "refresh", seen.append)
+    assert fetch.run_fetch(refresh_all=True, teams=str(tmp_path / "t.json")) == 0
+    assert seen == [tmp_path / "t.json"]
+
+
+def test_run_fetch_error(monkeypatch):
+    def boom(url, teams_path):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(fetch, "fetch_one", boom)
+    with pytest.raises(SystemExit, match="offline"):
+        fetch.run_fetch(TEAM_URL)

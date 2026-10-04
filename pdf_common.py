@@ -1,7 +1,7 @@
 """Shared PDF helpers for the spielplan project.
 
 Font registration, page margins, colours, club header and footer helpers –
-used by ``aufstellung.py``, ``anwesenheit.py`` and ``visualize_spiele.py``.
+used by the PDF modules (overview, team, lineup sheet, attendance).
 """
 
 from __future__ import annotations

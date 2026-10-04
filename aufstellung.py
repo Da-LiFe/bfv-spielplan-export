@@ -52,6 +52,7 @@ from config import (
     SCRIPT_DIR,
     WEEKDAYS_DE,
 )
+from games import find_team_game, load_games, slugify
 from pdf_common import BOLD_FONT, FONT
 from util import esc, load_json_strict, maps_url, parse_date, place_text, write_json
 
@@ -816,81 +817,143 @@ def new_lineup(team: str, game_date: date, roster: list[dict[str, Any]]) -> Line
     )
 
 
-def cli_main(argv: list[str] | None = None) -> int:
-    """Standalone CLI for scaffolding a new lineup entry."""
-    ap = argparse.ArgumentParser(
-        description="Lineup sheet generator and session scaffolding."
-    )
-    ap.add_argument(
-        "--new",
-        action="store_true",
-        help="Scaffold a new lineup entry in aufstellungen.json for a team and "
-        "date, pre-filling every roster kid as nominated player",
-    )
-    ap.add_argument(
-        "--team",
-        default=None,
-        help="Team alias/name (must match a key in roster.json for --new)",
-    )
-    ap.add_argument(
-        "--date",
-        default=None,
-        help="Game date as 2026-05-02 or 02.05.2026 (required with --new)",
-    )
-    args = ap.parse_args(sys.argv[1:] if argv is None else argv)
+def run_lineup(
+    team_arg: str, date_arg: str | None = None, out: str | Path | None = None
+) -> int:
+    """``spielplan.py aufstellung``: render the lineup sheet of one game."""
+    day = None
+    if date_arg:
+        day = parse_date(date_arg)
+        if day is None:
+            sys.exit(f"Ung\u00fcltiges Datum '{date_arg}' (erwartet YYYY-MM-DD).")
 
-    if not args.new:
-        ap.error("only --new is supported")
-    if not args.team or not args.date:
-        ap.error("--new requires --team and --date")
-    game_date = parse_date(args.date)
-    if game_date is None:
-        ap.error(f"ungültiges Datum: {args.date}")
-    path = DEFAULT_PATH
+    lineups, load_warnings = load_lineups(SCRIPT_DIR / AUFSTELLUNGEN_NAME)
+    for warning in load_warnings:
+        print(f"Warnung: {warning}", file=sys.stderr)
 
+    games, _, sources = load_games()
+    lowered = team_arg.lower()
+    source = next(
+        (
+            s
+            for s in sources
+            if s["team"].lower() == lowered
+            or (s.get("original") or "").lower() == lowered
+        ),
+        None,
+    )
+    names = {team_arg}
+    if source:
+        names |= {source["team"], source.get("original") or source["team"]}
+    team_lineups = lineups_for_team(lineups, names)
+    if not team_lineups:
+        available = sorted({lu.team for lu in lineups})
+        sys.exit(
+            f"Keine Aufstellung f\u00fcr '{team_arg}' gefunden. Teams mit Aufstellung: "
+            f"{', '.join(available) or 'keine'}"
+        )
+    lineup = select_lineup(team_lineups, day)
+    if lineup is None:
+        dates = ", ".join(lu.date.isoformat() for lu in team_lineups)
+        what = f"Aufstellung am {day.isoformat()}" if day else "kommende Aufstellung"
+        sys.exit(f"Keine {what} f\u00fcr '{team_arg}'. Vorhandene Termine: {dates}")
+
+    team = source["team"] if source else lineup.team
+    game = find_team_game(
+        games, team, datetime.combine(lineup.date, datetime.min.time())
+    )
+    info = None
+    if game:
+        opponent = game["gast"] if game["heim"] == team else game["heim"]
+        info = GameInfo(
+            opponent=opponent,
+            kickoff=game["time"],
+            competition=game["wettbewerb"],
+            is_home=game["heim"] == team,
+            spielort=game["spielort"],
+        )
+    else:
+        print(
+            f"Warnung: Kein Spiel von '{team}' am {lineup.date.strftime('%d.%m.%Y')} "
+            "in den *_spiele_web.csv \u2013 Gegner und Treffpunkt unbekannt.",
+            file=sys.stderr,
+        )
+
+    cfg = kapitane.load_all(
+        SCRIPT_DIR / kapitane.CONFIG_NAME, SCRIPT_DIR / kapitane.ROSTER_NAME
+    )
+    captain = kapitane.captains_for(cfg, names | {lineup.team}).get(
+        kapitane.duty_week(lineup.date), ""
+    )
+
+    for warning in validate(lineup):
+        print(f"Warnung: {warning}", file=sys.stderr)
+
+    logo = get_logo(cache_path=SCRIPT_DIR / ".bfv_cache" / LOGO_CACHE_PATH.name)
+    out_path = (
+        Path(out)
+        if out
+        else SCRIPT_DIR / f"{slugify(team)}_aufstellung_{lineup.date.isoformat()}.pdf"
+    )
+    build_lineup_pdf(lineup, out_path, info, captain, logo)
+    opponent_txt = f" gegen {info.opponent}" if info else ""
+    print(f"Aufstellung {team} am {lineup.date.strftime('%d.%m.%Y')}{opponent_txt}")
+    print(f"PDF:  {out_path}")
+    return 0
+
+
+def scaffold_lineup(team: str, game_date: date, path: Path | None = None) -> int:
+    """``spielplan.py aufstellung --new``: add an entry with the whole roster."""
+    path = path or SCRIPT_DIR / AUFSTELLUNGEN_NAME
     roster = kapitane.load_roster_with_numbers()
-    # Try to match the team name (case-insensitive)
-    team_key = None
-    for key in roster:
-        if key.lower() == args.team.lower():
-            team_key = key
-            break
+    team_key = next((key for key in roster if key.lower() == team.lower()), None)
     if team_key is None:
         available = ", ".join(sorted(roster.keys())) or "keine"
-        sys.exit(f"Kein Kader für '{args.team}' gefunden. Teams mit Kader: {available}")
+        sys.exit(f"Kein Kader f\u00fcr '{team}' gefunden. Teams mit Kader: {available}")
     kids = roster[team_key]
     if not kids:
-        sys.exit(f"Kader für '{args.team}' ist leer.")
+        sys.exit(f"Kader f\u00fcr '{team}' ist leer.")
 
     lineups, warnings = load_lineups(path)
     data_warnings = [w for w in warnings if "nicht gefunden" not in w]
     if data_warnings:
         for w in data_warnings:
             print(f"Warnung: {w}", file=sys.stderr)
-        sys.exit("Datei enthält ungültige Einträge – nicht überschrieben.")
+        sys.exit(
+            "Datei enth\u00e4lt ung\u00fcltige Eintr\u00e4ge \u2013 nicht \u00fcberschrieben."
+        )
     for lu in lineups:
         if lu.team.lower() == team_key.lower() and lu.date == game_date:
             print(
-                f"Warnung: Eintrag für '{team_key}' am {game_date.isoformat()} "
-                "existiert bereits – nichts geändert."
+                f"Warnung: Eintrag f\u00fcr '{team_key}' am {game_date.isoformat()} "
+                "existiert bereits \u2013 nichts ge\u00e4ndert."
             )
             return 0
 
-    lineup = new_lineup(team_key, game_date, kids)
-    lineups.append(lineup)
+    lineups.append(new_lineup(team_key, game_date, kids))
     save_lineups(lineups, path)
     print(
         f"Aufstellung: {team_key} am {game_date.strftime('%d.%m.%Y')} "
-        f"– {len(kids)} Spieler"
+        f"\u2013 {len(kids)} Spieler"
     )
     return 0
 
 
-if __name__ == "__main__":
-    import sys
+def legacy_argv(argv: list[str]) -> list[str]:
+    """Translate an old ``aufstellung.py`` call into ``spielplan.py`` arguments."""
+    ap = argparse.ArgumentParser(prog="aufstellung.py")
+    ap.add_argument("--new", action="store_true")
+    ap.add_argument("--team", default=None)
+    ap.add_argument("--date", default=None)
+    args = ap.parse_args(argv)
+    if not args.new:
+        ap.error("only --new is supported")
+    if not args.team or not args.date:
+        ap.error("--new requires --team and --date")
+    return ["aufstellung", args.team, "--new", "--date", args.date]
 
+
+if __name__ == "__main__":
     import spielplan
 
-    # aufstellung.py only supports --new, --team, --date, --out
-    # These map directly to spielplan.py aufstellung
-    sys.exit(spielplan._deprecate("aufstellung.py", "aufstellung", sys.argv[1:]))
+    sys.exit(spielplan.deprecated("aufstellung.py", legacy_argv(sys.argv[1:])))

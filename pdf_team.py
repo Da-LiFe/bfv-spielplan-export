@@ -1,11 +1,13 @@
 """Single-team PDF with upcoming games.
 
 Produces a PDF listing the next few games for one team, with optional
-Kapit\u00e4n (captain) assignment display.
+Kapit\u00e4n (captain) assignment display. ``run_team`` is the
+``spielplan.py team`` command.
 """
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +20,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table
 import aufstellung
 import kapitane
 from config import LINK_COLOR, SCRIPT_DIR, WEEKDAYS_DE
-from games import Game
+from games import Game, load_games, next_games_for_team, resolve_team, slugify
 from pdf_common import (
     AWAY_COLOR,
     BOLD_FONT,
@@ -329,3 +331,46 @@ def build_team_pdf(
         bottomMargin=14 * mm,
         title=f"\u00dcberblick Spieltage \u2013 {team}",
     ).build(story)
+
+
+def run_team(name: str, num: int = 4, out: str | Path | None = None) -> int:
+    """Write the PDF with the next ``num`` games of one team (alias or BFV name)."""
+    if num <= 0:
+        sys.exit("--next must be a positive number of games.")
+    games, _, sources = load_games()
+    if not games:
+        sys.exit("Keine *_spiele_web.csv Dateien gefunden.")
+    source = resolve_team(sources, name)
+    team = source["team"]
+    next_games = next_games_for_team(games, team, num)
+    if not next_games:
+        sys.exit(f"Keine bevorstehenden Spiele f\u00fcr '{team}' gefunden.")
+    out_path = Path(out) if out else SCRIPT_DIR / f"{slugify(team)}_spiele.pdf"
+    cfg = kapitane.load_all(
+        SCRIPT_DIR / kapitane.CONFIG_NAME, SCRIPT_DIR / kapitane.ROSTER_NAME
+    )
+    names = {team, source.get("original") or team}
+    captain_by_week = kapitane.captains_for(cfg, names)
+    build_team_pdf(
+        next_games,
+        team,
+        sources,
+        out_path,
+        len(next_games),
+        captain_by_week,
+        logo=_get_logo(),
+    )
+    print(f"{len(next_games)} kommende Spiele f\u00fcr {team}")
+    print(f"PDF:  {out_path}")
+    open_weeks = [
+        kapitane.week_range(kapitane.duty_week(g["date"].date()))
+        for g in next_games
+        if not captain_by_week.get(kapitane.duty_week(g["date"].date()), "")
+    ]
+    if open_weeks:
+        print(
+            f"Hinweis: Kapit\u00e4n offen f\u00fcr {', '.join(open_weeks)} \u2013 "
+            "'spielplan.py captains --assign' f\u00fchrt die Zuteilung durch.",
+            file=sys.stderr,
+        )
+    return 0
