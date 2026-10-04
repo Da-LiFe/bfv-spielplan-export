@@ -305,7 +305,7 @@ def test_load_teams_missing_team_without_url(tmp_path):
 def test_load_teams_invalid_json(tmp_path):
     teams_file = tmp_path / "teams.json"
     teams_file.write_text("{kein json", encoding="utf-8")
-    with pytest.raises(SystemExit, match="not valid JSON"):
+    with pytest.raises(SystemExit, match="ungültiges JSON"):
         fetch.load_teams(teams_file)
 
 

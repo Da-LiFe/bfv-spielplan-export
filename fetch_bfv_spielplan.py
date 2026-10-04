@@ -4,7 +4,6 @@ import argparse
 import csv
 import hashlib
 import html as htmllib
-import json
 import os
 import re
 import sys
@@ -16,6 +15,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from config import SCRIPT_DIR
+from util import load_json_list_strict, write_json_list
 
 CACHE_DIR = SCRIPT_DIR / ".bfv_cache"
 CACHE_TTL = 3600  # 1 hour
@@ -263,20 +263,12 @@ def _resolve_team_name(html: str, url: str) -> str:
 
 def _ensure_team_in_teams_json(url: str, alias: str, teams_path: Path) -> None:
     """Add url to teams.json if not already present."""
-    if teams_path.exists():
-        try:
-            data = json.loads(teams_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            data = []
-    else:
-        data = []
+    data = load_json_list_strict(teams_path)
     for entry in data:
         if isinstance(entry, dict) and entry.get("url") == url:
             return
     data.append({"url": url, "alias": alias})
-    teams_path.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    write_json_list(teams_path, data)
     print(f'Added "{alias}" ({url}) to teams.json')
 
 
@@ -321,12 +313,11 @@ def load_teams(teams_path: Path) -> list[dict]:
     """Load team entries (url + optional alias) from a JSON file."""
     if not teams_path.exists():
         sys.exit(f"Error: {teams_path} not found.")
-    try:
-        data = json.loads(teams_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        sys.exit(f"Error: {teams_path} is not valid JSON: {exc}")
+    raw = load_json_list_strict(teams_path)
+    if not isinstance(raw, list):
+        sys.exit(f"Error: {teams_path} does not contain a JSON array.")
     teams: list[dict] = []
-    for entry in data:
+    for entry in raw:
         if not isinstance(entry, dict) or not entry.get("url"):
             sys.exit(f"Error: each entry in {teams_path} needs a 'url' field.")
         teams.append({"url": entry["url"], "alias": entry.get("alias")})

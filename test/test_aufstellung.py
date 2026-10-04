@@ -148,13 +148,21 @@ def test_normalize_data():
     assert "keine Liste" in aufstellung.normalize_data([])[1][0]
 
 
-def test_load_lineups(tmp_path):
+def test_load_lineups_missing_file(tmp_path):
     path = tmp_path / "aufstellungen.json"
     lineups, warnings = aufstellung.load_lineups(path)
     assert lineups == [] and "nicht gefunden" in warnings[0]
+
+
+def test_load_lineups_invalid_json(tmp_path):
+    path = tmp_path / "aufstellungen.json"
     path.write_text("{kaputt", encoding="utf-8")
-    lineups, warnings = aufstellung.load_lineups(path)
-    assert lineups == [] and "ungültiges JSON" in warnings[0]
+    with pytest.raises(SystemExit, match="ungültiges JSON"):
+        aufstellung.load_lineups(path)
+
+
+def test_load_lineups_valid(tmp_path):
+    path = tmp_path / "aufstellungen.json"
     path.write_text(json.dumps({"spiele": [raw_game()]}), encoding="utf-8")
     lineups, warnings = aufstellung.load_lineups(path)
     assert len(lineups) == 1 and warnings == []

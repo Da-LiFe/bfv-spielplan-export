@@ -84,19 +84,18 @@ def test_load_data_missing_file(tmp_path):
     }
 
 
-def test_load_data_invalid_json(tmp_path, capsys):
+def test_load_data_invalid_json(tmp_path):
     p = tmp_path / "anwesenheit.json"
     p.write_text("{ kaputt", encoding="utf-8")
-    data = anwesenheit.load_data(p)
-    assert data["sessions"] == []
-    assert "ungültiges JSON" in capsys.readouterr().err
+    with pytest.raises(SystemExit, match="ungültiges JSON"):
+        anwesenheit.load_data(p)
 
 
-def test_load_data_prints_warnings(tmp_path, capsys):
+def test_load_data_aborts_on_invalid_entry(tmp_path, capsys):
     p = tmp_path / "anwesenheit.json"
     p.write_text(json.dumps({"sessions": [raw_session(21, values={"Lena": "X"})]}))
-    data = anwesenheit.load_data(p)
-    assert data["sessions"][0]["values"] == {"Lena": "N"}
+    with pytest.raises(SystemExit, match="ungültige Einträge"):
+        anwesenheit.load_data(p)
     assert "Warnung" in capsys.readouterr().err
 
 

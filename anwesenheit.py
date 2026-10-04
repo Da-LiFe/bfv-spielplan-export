@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import html as htmllib
-import json
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -32,6 +31,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 import kapitane
 from config import CSV_DATE_FORMAT, MONTHS_DE, SCRIPT_DIR, WEEKDAYS_DE
+from util import load_json_strict, write_json
 
 ANWESENHEIT_NAME = "anwesenheit.json"
 DEFAULT_PATH = SCRIPT_DIR / ANWESENHEIT_NAME
@@ -142,45 +142,33 @@ def normalize_data(raw: Any) -> dict[str, Any]:
 
 
 def load_data(path: Path | None = None) -> dict[str, Any]:
-    """Load and normalize ``anwesenheit.json``; print warnings to stderr."""
+    """Load and normalize ``anwesenheit.json``; invalid JSON raises ``SystemExit``."""
     data_path = path or DEFAULT_PATH
-    if not data_path.exists():
-        return empty_data()
-    try:
-        raw = json.loads(data_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        print(
-            f"{data_path.name}: ungültiges JSON – keine Daten geladen.",
-            file=sys.stderr,
-        )
-        return empty_data()
+    raw = load_json_strict(data_path)
     data = normalize_data(raw)
-    for warning in data["warnings"]:
-        print(f"Warnung: {warning}", file=sys.stderr)
+    if data["warnings"]:
+        for warning in data["warnings"]:
+            print(f"Warnung: {warning}", file=sys.stderr)
+        sys.exit(f"{data_path.name}: ungültige Einträge – nicht überschrieben.")
     return data
 
 
 def save_data(sessions: list[dict[str, Any]], path: Path | None = None) -> None:
-    """Write the sessions to ``anwesenheit.json`` (dates as ISO strings)."""
+    """Write the sessions to ``anwesenheit.json`` atomically."""
     data_path = path or DEFAULT_PATH
-    data_path.write_text(
-        json.dumps(
-            {
-                "sessions": [
-                    {
-                        **s,
-                        "date": s["date"].isoformat()
-                        if isinstance(s["date"], date)
-                        else str(s["date"]),
-                    }
-                    for s in sessions
-                ]
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    write_json(
+        data_path,
+        {
+            "sessions": [
+                {
+                    **s,
+                    "date": s["date"].isoformat()
+                    if isinstance(s["date"], date)
+                    else str(s["date"]),
+                }
+                for s in sessions
+            ]
+        },
     )
 
 

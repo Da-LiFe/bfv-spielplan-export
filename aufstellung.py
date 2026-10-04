@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import html as htmllib
-import json
 import re
 import sys
 import time
@@ -55,7 +54,7 @@ from config import (
     SCRIPT_DIR,
     WEEKDAYS_DE,
 )
-from util import maps_url, place_text
+from util import load_json_strict, maps_url, place_text, write_json
 
 AUFSTELLUNGEN_NAME = "aufstellungen.json"
 DEFAULT_PATH = SCRIPT_DIR / AUFSTELLUNGEN_NAME
@@ -282,15 +281,15 @@ def normalize_data(raw: Any) -> tuple[list[Lineup], list[str]]:
 
 
 def load_lineups(path: Path | None = None) -> tuple[list[Lineup], list[str]]:
-    """Load ``aufstellungen.json``; a missing or broken file yields a warning."""
+    """Load ``aufstellungen.json``; invalid JSON raises ``SystemExit``."""
     file_path = path or DEFAULT_PATH
     if not file_path.exists():
         return [], [f"{file_path.name} nicht gefunden."]
-    try:
-        raw = json.loads(file_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        return [], [f"{file_path.name}: ungültiges JSON ({exc})."]
-    return normalize_data(raw)
+    raw = load_json_strict(file_path)
+    lineups, warnings = normalize_data(raw)
+    if not lineups and warnings:
+        sys.exit(f"{file_path.name}: {warnings[0]}")
+    return lineups, warnings
 
 
 def lineups_for_team(lineups: list[Lineup], names: set[str]) -> list[Lineup]:
@@ -778,7 +777,7 @@ def build_lineup_pdf(
 
 
 def save_lineups(lineups: list[Lineup], path: Path | None = None) -> None:
-    """Write ``lineups`` back to ``aufstellungen.json``."""
+    """Write ``lineups`` back to ``aufstellungen.json`` atomically."""
     file_path = path or DEFAULT_PATH
     entries = []
     for lu in lineups:
@@ -793,10 +792,7 @@ def save_lineups(lineups: list[Lineup], path: Path | None = None) -> None:
             "notizen_spieler": {str(k): list(v) for k, v in lu.notizen_spieler.items()},
         }
         entries.append(entry)
-    file_path.write_text(
-        json.dumps({"spiele": entries}, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_json(file_path, {"spiele": entries})
 
 
 def new_lineup(team: str, game_date: date, roster: list[dict[str, Any]]) -> Lineup:
@@ -893,7 +889,12 @@ def cli_main(argv: list[str] | None = None) -> int:
     if not kids:
         sys.exit(f"Kader für '{args.team}' ist leer.")
 
-    lineups, _ = load_lineups(path)
+    lineups, warnings = load_lineups(path)
+    data_warnings = [w for w in warnings if "nicht gefunden" not in w]
+    if data_warnings:
+        for w in data_warnings:
+            print(f"Warnung: {w}", file=sys.stderr)
+        sys.exit("Datei enthält ungültige Einträge – nicht überschrieben.")
     for lu in lineups:
         if lu.team.lower() == team_key.lower() and lu.date == game_date:
             print(
