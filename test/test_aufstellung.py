@@ -7,6 +7,10 @@ from datetime import date, timedelta
 
 import pytest
 from pdfminer.high_level import extract_text
+from pdfminer.pdfdocument import PDFDocument
+from pdfminer.pdfpage import PDFPage
+from pdfminer.pdfparser import PDFParser
+from pdfminer.pdftypes import resolve1
 
 import aufstellung
 import kapitane
@@ -446,10 +450,40 @@ def real_logo(tmp_path):
     return path
 
 
+def pdf_links(path):
+    """Return every clickable URI in the PDF."""
+    uris = []
+    with open(path, "rb") as fh:
+        doc = PDFDocument(PDFParser(fh))
+        for page in PDFPage.create_pages(doc):
+            for ref in resolve1(page.annots) or []:
+                annot = resolve1(ref)
+                if not isinstance(annot, dict):
+                    continue
+                subtype = resolve1(annot.get("Subtype"))
+                if getattr(subtype, "name", None) != "Link":
+                    continue
+                action = resolve1(annot.get("A")) if isinstance(annot, dict) else None
+                uri = (
+                    resolve1(action.get("URI"))
+                    if action and isinstance(action, dict)
+                    else None
+                )
+                if isinstance(uri, bytes):
+                    uri = uri.decode()
+                if uri:
+                    uris.append(uri)
+    return uris
+
+
 def test_build_lineup_pdf_full(tmp_path):
     out = tmp_path / "a.pdf"
     game = aufstellung.GameInfo(
-        opponent="FC Gegner", kickoff="10:00", competition="U8 Kreis", is_home=True
+        opponent="FC Gegner",
+        kickoff="10:00",
+        competition="U8 Kreis",
+        is_home=True,
+        spielort="Sportanlage | Waldplatz 2 | 82205 Gilching",
     )
     aufstellung.build_lineup_pdf(
         make_lineup(), out, game, "Mia", logo=real_logo(tmp_path)
@@ -468,6 +502,21 @@ def test_build_lineup_pdf_full(tmp_path):
     assert "Hannah" in text and "8er" in text
 
 
+def test_build_lineup_pdf_shows_address_and_map_link(tmp_path):
+    out = tmp_path / "ort.pdf"
+    game = aufstellung.GameInfo(
+        opponent="FC Gegner",
+        spielort="Sportanlage Gilching | Waldplatz 2 | 82205 Gilching",
+    )
+    aufstellung.build_lineup_pdf(make_lineup(), out, game)
+    text = extract_text(str(out))
+    assert "Sportanlage Gilching, Waldplatz 2, 82205 Gilching" in text
+    assert "Karte" in text
+    maps = [u for u in pdf_links(out) if "google.com/maps" in u]
+    assert len(maps) == 1
+    assert "Sportanlage%20Gilching" in maps[0]
+
+
 def test_build_lineup_pdf_without_game(tmp_path, capsys):
     out = tmp_path / "b.pdf"
     broken_logo = tmp_path / "broken.png"
@@ -477,8 +526,19 @@ def test_build_lineup_pdf_without_game(tmp_path, capsys):
     text = extract_text(str(out))
     assert "Gegner unbekannt" in text
     assert "Auswärtsspiel" not in text
+    assert "Karte" not in text
     assert "Bank (0)" in text
     assert "Vereinslogo nicht lesbar" in capsys.readouterr().err
+
+
+def test_build_lineup_pdf_blank_spielort_has_no_map_link(tmp_path):
+    out = tmp_path / "leer.pdf"
+    aufstellung.build_lineup_pdf(
+        make_lineup(), out, aufstellung.GameInfo(opponent="FC Gegner", spielort=" |  ")
+    )
+    text = extract_text(str(out))
+    assert "Karte" not in text
+    assert not [u for u in pdf_links(out) if "google.com" in u]
 
 
 def test_build_lineup_pdf_away_single_page(tmp_path):

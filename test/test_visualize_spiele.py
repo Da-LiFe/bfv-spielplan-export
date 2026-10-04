@@ -11,6 +11,13 @@ import visualize_spiele as vis
 U15 = "TSV Gilching/Argelsried U15"
 U17 = "TSV Gilching/Argelsried U17"
 
+
+@pytest.fixture(autouse=True)
+def _no_logo_download(monkeypatch):
+    """Keep --team runs offline: never fetch the club logo in tests."""
+    monkeypatch.setattr(vis.aufstellung, "get_logo", lambda **kw: None)
+
+
 CSV_HEADER = [
     "Wettbewerb",
     "Datum",
@@ -161,19 +168,6 @@ def test_short_place_truncates():
     out = vis.short_place("X" * 100)
     assert len(out) == 45
     assert out.endswith("…")
-
-
-# --------------------------------------------------------------- maps_url()
-
-
-def test_maps_url_empty():
-    assert vis.maps_url("") == ""
-
-
-def test_maps_url_quotes_and_joins():
-    url = vis.maps_url("Sportpark | Gilching")
-    assert url.startswith("https://www.google.com/maps/search/?api=1&query=")
-    assert "%2C" in url
 
 
 # ------------------------------------------------------------------- esc()

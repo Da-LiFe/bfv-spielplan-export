@@ -60,3 +60,5 @@ CLUB_MARKERS: set[str] = {
     "tsv gilching-argelsried",
     "tsv gilching/a",
 }
+
+LINK_COLOR: str = "#0d6efd"

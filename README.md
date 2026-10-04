@@ -229,6 +229,9 @@ The lineups live in `aufstellungen.json` (gitignored, kid names); see `aufstellu
   **Treffpunkt** is always one hour before kickoff; the **Kapitän der Woche**
   comes from `kapitane.json`. When there is no matching game or captain, the
   sheet shows `Gegner unbekannt` / `-`.
+- The header shows the venue address from the CSV `Spielort` column (its
+  pipe-separated parts joined with commas) with a clickable `Karte »` link to
+  Google Maps. The line is omitted when the CSV has no address.
 - Each starter is drawn on the pitch at the spot of their position code, with
   their shirt number from `aufgebot`. Supported codes (case-insensitive):
   `Tor`/`TW`, `LV`, `IV`, `RV`, `6er`/`ZDM`, `ZM`, `LM`, `RM`, `8er`,
@@ -277,6 +280,7 @@ node test/spielplan.test.mjs    # JS harness for the embedded filter/export code
 ## Project layout
 
 - `config.py` — shared constants (`CLUB_MARKERS`, `PALETTE`, date format, …)
+- `util.py` — shared helpers (location formatting, map links)
 - `teams.json` — team config: BFV URLs and optional display aliases
 - `fetch_bfv_spielplan.py` — BFV fetcher (single fetch + `--refresh`)
 - `visualize_spiele.py` — HTML/PDF generator

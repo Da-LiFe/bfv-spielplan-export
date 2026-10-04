@@ -6,7 +6,6 @@ import html as htmllib
 import json
 import re
 import sys
-import urllib.parse
 from collections import Counter, OrderedDict
 from datetime import datetime
 from pathlib import Path
@@ -34,12 +33,14 @@ from config import (
     CLUB_MARKERS,
     CLUB_NAME,
     CSV_DATE_FORMAT,
+    LINK_COLOR,
     MONTHS_DE,
     PALETTE,
     SCRIPT_DIR,
     WD,
     WEEKDAYS_DE,
 )
+from util import maps_url, place_text
 
 # Register NotoSans for proper umlaut/support in PDFs
 _FONT_PATH = SCRIPT_DIR / "fonts" / "NotoSans-Regular.ttf"
@@ -112,6 +113,13 @@ def team_color(name: str) -> str:
 def slugify(name: str) -> str:
     """Slugify a team name for filenames, mirroring the .ics export slug."""
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def club_logo() -> Path | None:
+    """Return the cached club logo (downloaded when stale) for PDF headers."""
+    return aufstellung.get_logo(
+        cache_path=SCRIPT_DIR / ".bfv_cache" / aufstellung.LOGO_CACHE_PATH.name
+    )
 
 
 def resolve_team(sources: list[Source], arg: str) -> Source:
@@ -258,14 +266,6 @@ def short_place(spielort: str, limit: int = 45) -> str:
     """Shorten a location string, replacing pipes with commas."""
     s = re.sub(r"\s*\|\s*", ", ", spielort)
     return s if len(s) <= limit else s[: limit - 1] + "\u2026"
-
-
-def maps_url(spielort: str) -> str:
-    """Build a Google Maps search URL for a location."""
-    q = re.sub(r"\s*\|\s*", ", ", spielort).strip()
-    if not q:
-        return ""
-    return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(q)
 
 
 def esc(t: str) -> str:
@@ -633,7 +633,7 @@ def _team_game_card(
     )
 
     place = g["spielort"].strip()
-    ort_txt = re.sub(r"\s*\|\s*", ", ", place).strip() if place else ""
+    ort_txt = place_text(place) if place else ""
     line1_parts: list[str] = []
     if g["wettbewerb"]:
         line1_parts.append(
@@ -643,11 +643,11 @@ def _team_game_card(
         map_href = maps_url(place)
         if map_href:
             line1_parts.append(
-                f'<link href="{esc(map_href)}"><font color="#0d6efd">Karte »</font></link>'
+                f'<link href="{esc(map_href)}"><font color="{LINK_COLOR}">Karte »</font></link>'
             )
     if g["link"]:
         line1_parts.append(
-            f'<link href="{esc(g["link"])}"><font color="#0d6efd"><b>Spiel »</b></font></link>'
+            f'<link href="{esc(g["link"])}"><font color="{LINK_COLOR}"><b>Spiel »</b></font></link>'
         )
     info1_para = Paragraph(
         "&nbsp;·&nbsp;".join(line1_parts),
@@ -1005,6 +1005,7 @@ def handle_aufstellung(
             kickoff=game["time"],
             competition=game["wettbewerb"],
             is_home=game["heim"] == team,
+            spielort=game["spielort"],
         )
     else:
         print(
@@ -1027,9 +1028,7 @@ def handle_aufstellung(
     for warning in aufstellung.validate(lineup):
         print(f"Warnung: {warning}", file=sys.stderr)
 
-    logo = aufstellung.get_logo(
-        cache_path=SCRIPT_DIR / ".bfv_cache" / aufstellung.LOGO_CACHE_PATH.name
-    )
+    logo = club_logo()
     out_path = (
         Path(out)
         if out

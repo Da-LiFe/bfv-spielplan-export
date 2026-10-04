@@ -7,11 +7,12 @@ players with their position code (``startelf``), the bench (``bank``), general
 team notes (``notizen_team``) and notes for single players
 (``notizen_spieler``).
 
-The opponent, kickoff and competition come from the fetched game CSVs; the
-meeting time ("Treffpunkt") is always one hour before kickoff and the
+The opponent, kickoff, competition and venue come from the fetched game CSVs;
+the meeting time ("Treffpunkt") is always one hour before kickoff and the
 "Kapitän der Woche" is looked up in ``kapitane.json``. The PDF is a single A4
-page with header, info box, a pitch with every starter on their position
-spot, bench and team notes, and a notes box with the per-player notes.
+page with header (club, opponent, date, venue address with a clickable map
+link), info box, a pitch with every starter on their position spot, bench and
+team notes, and a notes box with the per-player notes.
 """
 
 from __future__ import annotations
@@ -46,7 +47,15 @@ from reportlab.platypus import (
 )
 
 import kapitane
-from config import CLUB_LOGO_URL, CLUB_NAME, MONTHS_DE, SCRIPT_DIR, WEEKDAYS_DE
+from config import (
+    CLUB_LOGO_URL,
+    CLUB_NAME,
+    LINK_COLOR,
+    MONTHS_DE,
+    SCRIPT_DIR,
+    WEEKDAYS_DE,
+)
+from util import maps_url, place_text
 
 AUFSTELLUNGEN_NAME = "aufstellungen.json"
 DEFAULT_PATH = SCRIPT_DIR / AUFSTELLUNGEN_NAME
@@ -156,6 +165,7 @@ class GameInfo:
     kickoff: str = ""
     competition: str = ""
     is_home: bool = False
+    spielort: str = ""
 
 
 @dataclass
@@ -534,6 +544,20 @@ def _player_label(name: str, aufgebot: dict[str, int]) -> str:
     return f"#{number} {name}" if number is not None else name
 
 
+def _address_paragraph(spielort: str, style: ParagraphStyle) -> Paragraph | None:
+    """Build the address line with a clickable map link, or None if unknown."""
+    text = place_text(spielort)
+    if not text:
+        return None
+    href = maps_url(spielort)
+    link = (
+        f' · <link href="{esc(href)}"><font color="{LINK_COLOR}">Karte »</font></link>'
+        if href
+        else ""
+    )
+    return Paragraph(f"{esc(text)}{link}", style)
+
+
 def build_lineup_pdf(
     lineup: Lineup,
     out_path: Path,
@@ -570,11 +594,14 @@ def build_lineup_pdf(
     sub_parts.append(lineup.team)
     if game and game.competition:
         sub_parts.append(game.competition)
-    header_text = [
+    header_text: list[Any] = [
         Paragraph(esc(CLUB_NAME), overline),
         Paragraph(f"Spieltag — gegen {esc(opponent)}", title),
         Paragraph(" · ".join(esc(p) for p in sub_parts), subtitle),
     ]
+    address = _address_paragraph(game.spielort if game else "", subtitle)
+    if address is not None:
+        header_text.append(address)
     logo_size = 20 * mm
     logo_cell: Any = ""
     if logo is not None:
