@@ -475,5 +475,6 @@ def test_main_single_url(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", ["fetch_bfv_spielplan.py", TEAM_URL])
     fetch.main()
     out = capsys.readouterr().out
-    assert "Wrote 2 matches to tsv-gilching-argelsried-2-7_spiele_web.csv" in out
-    assert (tmp_path / "tsv-gilching-argelsried-2-7_spiele_web.csv").exists()
+    assert "Wrote 2 matches to" in out
+    csv_name = "tsv-gilching-argelsried-2-7_spiele_web.csv"
+    assert (fetch.SCRIPT_DIR / csv_name).exists()

@@ -7,6 +7,7 @@ import html as htmllib
 import os
 import re
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -272,6 +273,34 @@ def _ensure_team_in_teams_json(url: str, alias: str, teams_path: Path) -> None:
     print(f'Added "{alias}" ({url}) to teams.json')
 
 
+def write_csv_atomic(path: Path, rows: list) -> None:
+    """Write *rows* to *path* as CSV atomically (temp file + ``os.replace``)."""
+    fieldnames = [
+        "Wettbewerb",
+        "Datum",
+        "Uhrzeit",
+        "Heim",
+        "Gast",
+        "Spielort",
+        "Link",
+        "Quelle",
+    ]
+    dir_name = os.path.dirname(os.path.abspath(path))
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".csv.tmp")
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            w.writerows(rows)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def fetch_one(url: str, teams_path: Path | None = None) -> tuple[Path, int]:
     """Fetch a single team's schedule and write it to a CSV file."""
     parts = [p for p in url.rstrip("/").split("/") if p]
@@ -282,26 +311,17 @@ def fetch_one(url: str, teams_path: Path | None = None) -> tuple[Path, int]:
         raise ValueError(f"'{team_id}' does not look like a valid team ID (from {url})")
     slug = parts[-2] if len(parts) >= 2 else team_id
     quelle = f"https://www.bfv.de/mannschaften/{slug}/{team_id}"
-    out_path = Path(f"{slug}_spiele_web.csv")
+    out_path = SCRIPT_DIR / f"{slug}_spiele_web.csv"
     rows = fetch_all_matches(team_id)
     for r in rows:
         r["Quelle"] = quelle
-    with open(out_path, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(
-            f,
-            fieldnames=[
-                "Wettbewerb",
-                "Datum",
-                "Uhrzeit",
-                "Heim",
-                "Gast",
-                "Spielort",
-                "Link",
-                "Quelle",
-            ],
+    if not rows and out_path.exists():
+        print(
+            f"Warnung: {slug} – keine Spiele gefunden, alte CSV beibehalten.",
+            file=sys.stderr,
         )
-        w.writeheader()
-        w.writerows(rows)
+        return out_path, 0
+    write_csv_atomic(out_path, rows)
     if teams_path is not None:
         profile_html = fetch(quelle)
         alias = _resolve_team_name(profile_html, url)
