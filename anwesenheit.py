@@ -494,4 +494,10 @@ def cli_main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(cli_main())
+    import sys
+
+    import spielplan
+
+    # anwesenheit.py only supports --new (and --team, --date, --file, --out)
+    # These map directly to spielplan.py anwesenheit
+    sys.exit(spielplan._deprecate("anwesenheit.py", "anwesenheit", sys.argv[1:]))

@@ -316,4 +316,48 @@ def main(argv: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    import spielplan
+
+    # Map old flags to new subcommands
+    argv = sys.argv[1:]
+    subcommand = "overview"
+    extra: list[str] = []
+
+    if "--aufstellung" in argv:
+        subcommand = "aufstellung"
+        # --date is passed through
+        if "--date" in argv:
+            idx = argv.index("--date")
+            extra.extend(argv[idx : idx + 2])
+        if "--team" in argv:
+            idx = argv.index("--team")
+            extra.extend(argv[idx : idx + 2])
+        if "--out" in argv:
+            idx = argv.index("--out")
+            extra.extend(argv[idx : idx + 2])
+    elif "--anwesenheit" in argv:
+        subcommand = "anwesenheit"
+        for flag in ("--team", "--kombiniert", "--out"):
+            if flag in argv:
+                idx = argv.index(flag)
+                extra.extend(argv[idx : idx + 2])
+    elif "--captains-assign" in argv:
+        subcommand = "captains"
+        extra.append("--assign")
+    elif "--captains-check" in argv:
+        subcommand = "captains"
+        extra.append("--check")
+    elif "--team" in argv:
+        subcommand = "team"
+        idx = argv.index("--team")
+        extra.extend(argv[idx : idx + 2])
+        if "--next" in argv:
+            idx = argv.index("--next")
+            extra.extend(argv[idx : idx + 2])
+        if "--out" in argv:
+            idx = argv.index("--out")
+            extra.extend(argv[idx : idx + 2])
+
+    sys.exit(spielplan._deprecate("visualize_spiele.py", subcommand, extra))

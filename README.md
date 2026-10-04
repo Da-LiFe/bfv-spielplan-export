@@ -20,7 +20,7 @@ Add one object per BFV team to `teams.json` (a `url` is required, `alias` is
 optional), then:
 
 ```bash
-python3 fetch_bfv_spielplan.py --refresh
+python3 spielplan.py fetch --refresh
 ```
 
 This fetches all teams from `teams.json`, writes one CSV per team, and
@@ -28,40 +28,73 @@ regenerates `spielplan.html` and `spielplan.pdf`.
 
 ## Usage
 
+### New CLI (spielplan.py)
+
 ```bash
-# Update everything (all teams from teams.json + regenerate HTML/PDF)
-python3 fetch_bfv_spielplan.py --refresh
+# Fetch all teams from teams.json + regenerate HTML/PDF
+python3 spielplan.py fetch --refresh
 
 # Fetch a single team (writes <slug>_spiele_web.csv)
-python3 fetch_bfv_spielplan.py <bfv-url>
+python3 spielplan.py fetch <bfv-url>
 
 # Fetch a single team to a specific file
-python3 fetch_bfv_spielplan.py <bfv-url> <output.csv>
+python3 spielplan.py fetch <bfv-url> --output <output.csv>
 
 # Use a teams file in a different location
-python3 fetch_bfv_spielplan.py --refresh --teams /path/to/teams.json
+python3 spielplan.py fetch --refresh --teams /path/to/teams.json
 
 # Generate HTML/PDF only, from existing CSVs
-python3 visualize_spiele.py
+python3 spielplan.py overview
 
 # Single-team overview PDF with the next 4 upcoming games
-# (writes <slug>_monthly.pdf, e.g. tsv-gilching-argelsried-u13-2_monthly.pdf)
-python3 visualize_spiele.py --team "TSV Gilching/Argelsried u13-2"
+python3 spielplan.py team "TSV Gilching/Argelsried u13-2"
 
 # Custom number of games / output path
-python3 visualize_spiele.py --team "TSV Gilching/Argelsried u13-2" --next 6 --out team.pdf
+python3 spielplan.py team "TSV Gilching/Argelsried u13-2" --next 6 --out team.pdf
 
-# Kapitän (team lead) assignments
-python3 visualize_spiele.py --captains-assign   # fill new duty weeks round-robin
-python3 visualize_spiele.py --captains-check   # verify equal distribution (exit 1 if off)
+# Generate lineup sheet for one game
+python3 spielplan.py aufstellung "TSV Gilching/Argelsried u13-2"
+python3 spielplan.py aufstellung "TSV Gilching/Argelsried u13-2" --date 2026-10-03
 
 # Scaffold a new lineup entry from roster.json
-python3 aufstellung.py --new --team "TSV Gilching/Argelsried u13-2" --date 2026-10-03
+python3 spielplan.py aufstellung "TSV Gilching/Argelsried u13-2" --new --date 2026-10-03
 
-# Lineup sheet for one game (next game with a lineup, or a given date)
-python3 visualize_spiele.py --aufstellung --team "TSV Gilching/Argelsried u13-2"
-python3 visualize_spiele.py --aufstellung --team "TSV Gilching/Argelsried u13-2" --date 2026-10-03
+# Render training attendance evaluation PDF
+python3 spielplan.py anwesenheit
+python3 spielplan.py anwesenheit --team "TSV Gilching/Argelsried u13-2"
+
+# Scaffold a new attendance session
+python3 spielplan.py anwesenheit --new --team "TSV Gilching/Argelsried u13-2" --date 2026-09-21
+
+# Combined view: fold sickness into absent column
+python3 spielplan.py anwesenheit --kombiniert
+
+# Fill or check captain assignments
+python3 spielplan.py captains --assign
+python3 spielplan.py captains --check
 ```
+
+### Migration from old entry points
+
+| Old command | New command |
+|-------------|-------------|
+| `fetch_bfv_spielplan.py --refresh` | `spielplan.py fetch --refresh` |
+| `fetch_bfv_spielplan.py <url>` | `spielplan.py fetch <url>` |
+| `visualize_spiele.py` | `spielplan.py overview` |
+| `visualize_spiele.py --team X` | `spielplan.py team X` |
+| `visualize_spiele.py --team X --next N --out Y` | `spielplan.py team X --next N --out Y` |
+| `visualize_spiele.py --aufstellung --team X` | `spielplan.py aufstellung X` |
+| `visualize_spiele.py --aufstellung --team X --date D` | `spielplan.py aufstellung X --date D` |
+| `visualize_spiele.py --anwesenheit` | `spielplan.py anwesenheit` |
+| `visualize_spiele.py --anwesenheit --team X --kombiniert` | `spielplan.py anwesenheit --team X --kombiniert` |
+| `visualize_spiele.py --captains-assign` | `spielplan.py captains --assign` |
+| `visualize_spiele.py --captains-check` | `spielplan.py captains --check` |
+| `aufstellung.py --new --team X --date D` | `spielplan.py aufstellung X --new --date D` |
+| `anwesenheit.py --new --team X --date D` | `spielplan.py anwesenheit --new --team X --date D` |
+
+Old entry points (`visualize_spiele.py`, `fetch_bfv_spielplan.py`,
+`aufstellung.py`, `anwesenheit.py`) still work but print a deprecation notice
+to stderr and forward to `spielplan.py`.
 
 ### Team configuration (`teams.json`)
 
@@ -85,14 +118,14 @@ names are never aliased.
 
 ### Team overview PDF
 
-`python3 visualize_spiele.py --team <Name/Alias>` generates a single, share-ready PDF
-(`<slug>_monthly.pdf`) with the next 4 upcoming games of one team — ideal for parents.
-The `--team` value matches a configured `alias` or the original BFV team name
-(case-insensitive); `--next N` changes the number of games, `--out` overrides the
-output path. Each game card shows weekday/date, time, home and away team, competition,
-location with a clickable map link, a home/away badge and the match link — it omits the
-"several games on the same day" (collision) highlighting. The PDF uses a portrait A4
-layout with one game card per game.
+`python3 spielplan.py team <Name/Alias>` generates a single, share-ready PDF
+(`<slug>_spiele.pdf`) with the next 4 upcoming games of one team — ideal for
+parents. The `--team` value matches a configured `alias` or the original BFV
+team name (case-insensitive); `--next N` changes the number of games, `--out`
+overrides the output path. Each game card shows weekday/date, time, home and
+away team, competition, location with a clickable map link, a home/away badge
+and the match link — it omits the "several games on the same day" (collision)
+highlighting. The PDF uses a portrait A4 layout with one game card per game.
 
 ### Kapitän (team lead) assignments
 
@@ -163,15 +196,15 @@ BFV team app and maintain it by hand:
   `N`, you only set the exceptions; duplicate team+date is skipped with a
   warning):
   ```bash
-  python3 anwesenheit.py --new --team "TSV Gilching/Argelsried u13-2" --date 2026-09-21
+  python3 spielplan.py anwesenheit --new --team "TSV Gilching/Argelsried u13-2" --date 2026-09-21
   ```
 - Render the evaluation PDF (stats work standalone, no game CSVs required):
   ```bash
-  python3 visualize_spiele.py --anwesenheit
+  python3 spielplan.py anwesenheit
   # only one team / custom output:
-  python3 visualize_spiele.py --anwesenheit --team "TSV Gilching/Argelsried u13-2" --out team.pdf
+  python3 spielplan.py anwesenheit --team "TSV Gilching/Argelsried u13-2" --out team.pdf
   # combined view: fold sickness into the A column, show only the Quote P rate:
-  python3 visualize_spiele.py --anwesenheit --kombiniert
+  python3 spielplan.py anwesenheit --kombiniert
   ```
 - The A4 PDF shows one table per team: `Spieler | Termine | P | S | A | N |
   Quote P | Quote P+S` plus a totals row. `Quote P` = `P / total`,
@@ -190,13 +223,13 @@ Scaffold a new entry from `roster.json` (no typing needed, every roster kid
 becomes a nominated player with auto-assigned numbers):
 
 ```bash
-python3 aufstellung.py --new --team "TSV Gilching/Argelsried u13-2" --date 2026-10-03
+python3 spielplan.py aufstellung "TSV Gilching/Argelsried u13-2" --new --date 2026-10-03
 ```
 
 Render the PDF for a single game:
 
 ```bash
-python3 visualize_spiele.py --aufstellung --team <Name/Alias> [--date YYYY-MM-DD]
+python3 spielplan.py aufstellung <Name/Alias> [--date YYYY-MM-DD]
 ```
 
 The lineups live in `aufstellungen.json` (gitignored, kid names); see `aufstellungen.example.json`:
@@ -262,7 +295,7 @@ new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
   highlighting only when 2+ selected teams play on the same day, map/match
   links, URL preselect (`?team=<Name>`), and `.ics` calendar export
 - `spielplan.pdf` — printable multi-page overview
-- `<slug>_monthly.pdf` — single-team overview of the next games (from `--team`)
+- `<slug>_spiele.pdf` — single-team overview of the next games (from `team`)
 - `kapitane.json` / `roster.json` — Kapitän duty assignments and team rosters
   (from `--captains-assign`, kid names stay local)
 - `anwesenheit.pdf` — training attendance evaluation (from `--anwesenheit`,
@@ -273,17 +306,23 @@ new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest -v   # Python unit tests (176)
+.venv/bin/python -m pytest -v   # Python unit tests (214)
 node test/spielplan.test.mjs    # JS harness for the embedded filter/export code (needs Node >= 18)
 ```
 
 ## Project layout
 
+- `spielplan.py` — unified CLI entry point (subcommands: fetch, overview, team, aufstellung, anwesenheit, captains)
 - `config.py` — shared constants (`CLUB_MARKERS`, `PALETTE`, date format, …)
 - `util.py` — shared helpers (location formatting, map links)
+- `games.py` — game loading, parsing, deduplication, grouping
+- `render_html.py` — HTML overview page generation
+- `pdf_overview.py` — multi-page overview PDF generation
+- `pdf_team.py` — single-team PDF generation
+- `fetch_bfv_spielplan.py` — BFV fetcher (deprecated; forwards to `spielplan.py fetch`)
+- `visualize_spiele.py` — HTML/PDF generator (deprecated; forwards to `spielplan.py`)
+- `anwesenheit.py` — training attendance data, stats, PDF and `--new` scaffolding (deprecated; forwards to `spielplan.py anwesenheit`)
+- `aufstellung.py` — lineup data, validation, pitch placement and lineup PDF (deprecated; forwards to `spielplan.py aufstellung`)
+- `kapitane.py` — captain assignment logic and roster loading
 - `teams.json` — team config: BFV URLs and optional display aliases
-- `fetch_bfv_spielplan.py` — BFV fetcher (single fetch + `--refresh`)
-- `visualize_spiele.py` — HTML/PDF generator
-- `anwesenheit.py` — training attendance data, stats, PDF and `--new` scaffolding
-- `aufstellung.py` — lineup data, validation, pitch placement and lineup PDF
 - `reports/` — project reports (history and design decisions)

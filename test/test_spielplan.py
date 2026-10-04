@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import pytest
@@ -14,7 +13,14 @@ import spielplan
 def test_build_parser_has_all_subcommands():
     parser = spielplan.build_parser()
     # Check that all expected subcommands exist
-    subcommands = ["fetch", "overview", "team", "aufstellung", "anwesenheit", "captains"]
+    subcommands = [
+        "fetch",
+        "overview",
+        "team",
+        "aufstellung",
+        "anwesenheit",
+        "captains",
+    ]
     # Get subparser choices from the parser
     for action in parser._subparsers._actions:
         if hasattr(action, "choices") and action.choices is not None:
@@ -110,3 +116,17 @@ def test_deprecate_prints_notice(capsys):
     assert "Warnung" in stderr
     assert "old_script.py" in stderr
     assert "spielplan.py team MyTeam" in stderr
+
+
+def test_deprecate_forwards_args(monkeypatch):
+    """Test that _deprecate forwards args to main()."""
+    captured_argv: list[str] | None = None
+
+    def mock_main(argv):
+        nonlocal captured_argv
+        captured_argv = argv
+        return 0
+
+    monkeypatch.setattr(spielplan, "main", mock_main)
+    spielplan._deprecate("old.py", "team", ["MyTeam", "--next", "5"])
+    assert captured_argv == ["team", "MyTeam", "--next", "5"]

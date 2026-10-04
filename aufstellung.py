@@ -887,4 +887,10 @@ def cli_main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(cli_main())
+    import sys
+
+    import spielplan
+
+    # aufstellung.py only supports --new, --team, --date, --out
+    # These map directly to spielplan.py aufstellung
+    sys.exit(spielplan._deprecate("aufstellung.py", "aufstellung", sys.argv[1:]))

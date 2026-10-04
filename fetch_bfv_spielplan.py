@@ -426,4 +426,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    import spielplan
+
+    sys.exit(spielplan._deprecate("fetch_bfv_spielplan.py", "fetch", sys.argv[1:]))
