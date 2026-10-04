@@ -558,6 +558,63 @@ def _address_paragraph(spielort: str, style: ParagraphStyle) -> Paragraph | None
     return Paragraph(f"{esc(text)}{link}", style)
 
 
+HEADER_LOGO_SIZE = 20 * mm
+
+
+def header_subtitle_style() -> ParagraphStyle:
+    """Grey style used for the info lines below the club header title."""
+    return _style("su", fontSize=9.5, textColor=colors.HexColor(MUTED))
+
+
+def build_club_header(
+    title: str,
+    sub_lines: list[Paragraph | str],
+    logo: Path | None,
+    content_w: float,
+) -> Table:
+    """Club-branded page header shared by all team PDFs.
+
+    Club name overline, bold ``title``, grey ``sub_lines`` (plain strings are
+    escaped, Paragraphs are used as given) and the club logo on the right,
+    underlined by the red accent rule.
+    """
+    overline = _style("ov", fontSize=9, textColor=colors.HexColor(MUTED))
+    title_style = _style("ti", fontName=BOLD_FONT, fontSize=18, leading=22)
+    subtitle = header_subtitle_style()
+    header_text: list[Paragraph] = [
+        Paragraph(esc(CLUB_NAME), overline),
+        Paragraph(esc(title), title_style),
+    ]
+    for line in sub_lines:
+        header_text.append(
+            line if isinstance(line, Paragraph) else Paragraph(esc(line), subtitle)
+        )
+    logo_cell: Any = ""
+    if logo is not None:
+        try:
+            ImageReader(str(logo)).getSize()  # fail now, not during build()
+            logo_cell = Image(
+                str(logo), width=HEADER_LOGO_SIZE, height=HEADER_LOGO_SIZE
+            )
+        except Exception as exc:
+            print(f"Warnung: Vereinslogo nicht lesbar ({exc}).", file=sys.stderr)
+    return Table(
+        [[header_text, logo_cell]],
+        colWidths=[
+            content_w - HEADER_LOGO_SIZE - 4 * mm,
+            HEADER_LOGO_SIZE + 4 * mm,
+        ],
+        style=[
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LINEBELOW", (0, 0), (-1, -1), 2.2, colors.HexColor(ACCENT)),
+        ],
+    )
+
+
 def build_lineup_pdf(
     lineup: Lineup,
     out_path: Path,
@@ -569,9 +626,7 @@ def build_lineup_pdf(
     margin = 14 * mm
     content_w = A4[0] - 2 * margin
 
-    overline = _style("ov", fontSize=9, textColor=colors.HexColor(MUTED))
-    title = _style("ti", fontName=BOLD_FONT, fontSize=18, leading=22)
-    subtitle = _style("su", fontSize=9.5, textColor=colors.HexColor(MUTED))
+    subtitle = header_subtitle_style()
     label = _style("la", fontSize=8, leading=10, textColor=colors.HexColor(MUTED))
     value = _style("va", fontName=BOLD_FONT, fontSize=10, leading=13)
     heading = _style(
@@ -594,33 +649,12 @@ def build_lineup_pdf(
     sub_parts.append(lineup.team)
     if game and game.competition:
         sub_parts.append(game.competition)
-    header_text: list[Any] = [
-        Paragraph(esc(CLUB_NAME), overline),
-        Paragraph(f"Spieltag — gegen {esc(opponent)}", title),
-        Paragraph(" · ".join(esc(p) for p in sub_parts), subtitle),
-    ]
+    sub_lines: list[Paragraph | str] = [" · ".join(sub_parts)]
     address = _address_paragraph(game.spielort if game else "", subtitle)
     if address is not None:
-        header_text.append(address)
-    logo_size = 20 * mm
-    logo_cell: Any = ""
-    if logo is not None:
-        try:
-            ImageReader(str(logo)).getSize()  # fail now, not during build()
-            logo_cell = Image(str(logo), width=logo_size, height=logo_size)
-        except Exception as exc:
-            print(f"Warnung: Vereinslogo nicht lesbar ({exc}).", file=sys.stderr)
-    header = Table(
-        [[header_text, logo_cell]],
-        colWidths=[content_w - logo_size - 4 * mm, logo_size + 4 * mm],
-        style=[
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("LINEBELOW", (0, 0), (-1, -1), 2.2, colors.HexColor(ACCENT)),
-        ],
+        sub_lines.append(address)
+    header = build_club_header(
+        f"Spieltag — gegen {opponent}", sub_lines, logo, content_w
     )
 
     meet = meeting_time(game.kickoff) if game else ""

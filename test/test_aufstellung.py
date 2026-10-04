@@ -476,6 +476,30 @@ def pdf_links(path):
     return uris
 
 
+def test_build_club_header_layout(tmp_path):
+    from reportlab.platypus import Image, Paragraph
+
+    link = Paragraph('<link href="https://x">Karte</link>')
+    header = aufstellung.build_club_header(
+        "Titel <&>", ["a & b", link], real_logo(tmp_path), 180 * aufstellung.mm
+    )
+    text_cell, logo_cell = header._cellvalues[0]
+    texts = [p.getPlainText() for p in text_cell]
+    assert texts[0] == aufstellung.CLUB_NAME
+    assert texts[1] == "Titel <&>"  # escaped markup renders literally
+    assert texts[2] == "a & b"
+    assert text_cell[3] is link  # Paragraphs are passed through unchanged
+    assert isinstance(logo_cell, Image)
+    assert sum(header._colWidths) == pytest.approx(180 * aufstellung.mm)
+
+
+def test_build_club_header_without_logo():
+    header = aufstellung.build_club_header("T", [], None, 100 * aufstellung.mm)
+    text_cell, logo_cell = header._cellvalues[0]
+    assert len(text_cell) == 2
+    assert logo_cell == ""
+
+
 def test_build_lineup_pdf_full(tmp_path):
     out = tmp_path / "a.pdf"
     game = aufstellung.GameInfo(

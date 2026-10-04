@@ -656,6 +656,36 @@ def test_build_team_pdf(tmp_path):
     vis.build_team_pdf(games, team, sources, out, len(games))
     assert out.exists()
     assert out.read_bytes()[:4] == b"%PDF"
+    text = extract_text(str(out))
+    assert "TSV Gilching/Argelsried" in text
+    assert "Überblick Spieltage" in text
+    assert "TSV Gilching/Argelsried U15\n" in text  # full name, own line
+    assert "\nNächste 2 Spiele ab" in text
+    assert "NÄCHSTE SPIELE" not in text
+    assert "Heimspiel" in text and "Auswärtsspiel" in text  # legend kept
+
+
+def test_build_team_pdf_with_logo(tmp_path):
+    from PIL import Image as PILImage
+
+    logo = tmp_path / "logo.png"
+    PILImage.new("RGB", (20, 20), "red").save(logo)
+    out = tmp_path / "team_logo.pdf"
+    team = U15
+    games = [make_relative_game(1, "10:00", team, "FC A")]
+    vis.build_team_pdf(games, team, [], out, 1, logo=logo)
+    assert b"/Subtype /Image" in out.read_bytes()
+    assert "Überblick Spieltage" in extract_text(str(out))
+
+
+def test_club_logo_uses_cache_dir(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(
+        vis.aufstellung, "get_logo", lambda **kw: calls.append(kw) or None
+    )
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    assert vis.club_logo() is None
+    assert calls[0]["cache_path"].parent == tmp_path / ".bfv_cache"
 
 
 def test_main_team_pdf(monkeypatch, tmp_path, capsys):

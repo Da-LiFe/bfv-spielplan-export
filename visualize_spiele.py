@@ -753,12 +753,14 @@ def build_team_pdf(
     out_path: Path,
     num: int,
     captain_by_week: dict[str, str] | None = None,
+    logo: Path | None = None,
 ) -> None:
     """Build a single-team PDF overview of the next ``num`` games.
 
     ``captain_by_week`` maps a duty-week key (see ``kapitane.duty_week``) to a
     kid's name; ``None`` hides the Kapitän row entirely. Weeks present in the
-    mapping show the name, missing keys fall back to "folgt".
+    mapping show the name, missing keys fall back to "folgt". ``logo`` is the
+    club logo shown in the header (same header as the lineup sheet).
     """
     font = "NotoSans" if _FONT_PATH.exists() else "Helvetica"
     bold_font = "NotoSans-Bold" if _FONT_BOLD_PATH.exists() else "Helvetica-Bold"
@@ -768,32 +770,6 @@ def build_team_pdf(
     RIGHT_MARGIN = 14 * mm
     CONTENT_WIDTH = A4[0] - LEFT_MARGIN - RIGHT_MARGIN
 
-    overline = ParagraphStyle(
-        "ov",
-        parent=styles["Normal"],
-        fontName=bold_font,
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor("#0d6efd"),
-        spaceAfter=1,
-    )
-    title = ParagraphStyle(
-        "t",
-        parent=styles["Title"],
-        fontSize=20,
-        leading=24,
-        spaceAfter=1,
-        fontName=bold_font,
-    )
-    subtitle = ParagraphStyle(
-        "st",
-        parent=styles["Normal"],
-        textColor=colors.grey,
-        fontSize=10,
-        leading=13,
-        spaceAfter=0,
-        fontName=font,
-    )
     legend = ParagraphStyle(
         "lg",
         parent=styles["Normal"],
@@ -817,25 +793,8 @@ def build_team_pdf(
     first_datum = games[0]["datum"] if games else "?"
     sub_txt = f"Nächste {num} Spiele ab {first_datum} · Stand: {german_now()}"
 
-    band = Table(
-        [
-            [
-                [
-                    Paragraph("NÄCHSTE SPIELE", overline),
-                    Paragraph(esc(team), title),
-                    Paragraph(esc(sub_txt), subtitle),
-                ]
-            ]
-        ],
-        colWidths=[CONTENT_WIDTH],
-        style=[
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eef4fb")),
-            ("BOX", (0, 0), (-1, -1), 1.2, colors.HexColor("#cfe0f2")),
-            ("TOPPADDING", (0, 0), (-1, -1), 9),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-            ("LEFTPADDING", (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ],
+    header = aufstellung.build_club_header(
+        "Überblick Spieltage", [team, sub_txt], logo, CONTENT_WIDTH
     )
 
     legend_txt = Paragraph("Karte- und Spiel-Links sind im PDF anklickbar.", legend)
@@ -859,7 +818,7 @@ def build_team_pdf(
         style=[("VALIGN", (0, 0), (-1, -1), "MIDDLE")],
     )
 
-    story = [band, Spacer(1, 5), legend_row, Spacer(1, 7)]
+    story = [header, Spacer(1, 5), legend_row, Spacer(1, 7)]
 
     for g in games:
         if captain_by_week is None:
@@ -875,7 +834,7 @@ def build_team_pdf(
     if source and source.get("url"):
         foot_txt = (
             f"Erstellt am {esc(german_now())}. Datenquelle: "
-            f'<link href="{esc(source["url"])}"><font color="#0d6efd">{esc(team)}</font></link>'
+            f'<link href="{esc(source["url"])}"><font color="{LINK_COLOR}">{esc(team)}</font></link>'
         )
     else:
         foot_txt = f"Erstellt am {esc(german_now())}. Datenquelle: {esc(team)}"
@@ -888,7 +847,7 @@ def build_team_pdf(
         rightMargin=RIGHT_MARGIN,
         topMargin=14 * mm,
         bottomMargin=14 * mm,
-        title=f"Nächste Spiele – {team}",
+        title=f"Überblick Spieltage – {team}",
     ).build(story)
 
 
@@ -1137,7 +1096,15 @@ def main(argv: list[str] | None = None) -> None:
             if team in cfg["teams"] or team in cfg["assignments"]
             else None
         )
-        build_team_pdf(next_games, team, sources, out, len(next_games), captain_by_week)
+        build_team_pdf(
+            next_games,
+            team,
+            sources,
+            out,
+            len(next_games),
+            captain_by_week,
+            logo=club_logo(),
+        )
         print(f"{len(next_games)} kommende Spiele für {team}")
         print(f"PDF:  {out}")
         if captain_by_week is not None:
