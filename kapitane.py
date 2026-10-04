@@ -209,10 +209,12 @@ def assign_round_robin(
 
     Each missing week goes to the kid with the fewest assignments so far
     (ties broken by roster order), so the result is balanced by construction.
+    Only counts assignments for the weeks being processed.
     """
     counts = {kid: 0 for kid in roster}
-    for kid in existing.values():
-        if kid in counts:
+    week_set = set(weeks)
+    for wk, kid in existing.items():
+        if wk in week_set and kid in counts:
             counts[kid] += 1
     result = dict(existing)
     for week in sorted(set(weeks)):

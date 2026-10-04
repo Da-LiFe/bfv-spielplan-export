@@ -140,6 +140,16 @@ def test_round_robin_keeps_unknown_existing_names():
     assert result["2026-02"] == "A"
 
 
+def test_round_robin_ignores_past_assignments():
+    """Assignments for weeks outside the target set must not affect balance."""
+    roster = ["A", "B"]
+    upcoming = ["2026-37", "2026-38"]
+    existing = {"2026-01": "A", "2026-02": "A", "2026-03": "A"}
+    result = kapitane.assign_round_robin(upcoming, roster, existing)
+    assert result["2026-37"] == "A"
+    assert result["2026-38"] == "B"
+
+
 def test_ensure_assignments_fills_and_is_idempotent():
     cfg = {"teams": {TG: ["A", "B"]}, "assignments": {}}
     weeks = {TG: ["2026-37", "2026-38", "2026-39"]}
