@@ -361,7 +361,11 @@ def build_anwesenheit_pdf(
     story = [
         aufstellung.build_club_header(
             "Anwesenheit – Auswertung",
-            [f"Stand: {esc(german_now())}"],
+            # Single-team report (e.g. --team filter): name the team first.
+            [
+                *(esc(t) for t in teams if len(teams) == 1),
+                f"Stand: {esc(german_now())}",
+            ],
             logo,
             CONTENT_WIDTH,
         ),
