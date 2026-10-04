@@ -1,6 +1,8 @@
 import json
 from datetime import date, timedelta
 
+import pytest
+
 import config
 import kapitane
 
@@ -310,3 +312,70 @@ def test_load_roster_with_numbers_old_format(tmp_path):
 
 def test_load_roster_with_numbers_missing_file(tmp_path):
     assert kapitane.load_roster_with_numbers(tmp_path / "missing.json") == {}
+
+
+# ------------------------------------------------- captains_for (T04)
+
+ALIAS = "U13 Alias"
+
+
+def cfg_with(assignments):
+    return kapitane.CaptainConfig(assignments=assignments)
+
+
+def test_captains_for_alias():
+    cfg = cfg_with({ALIAS: {"2026-40": "Lena"}})
+    assert kapitane.captains_for(cfg, {ALIAS, TG}) == {"2026-40": "Lena"}
+
+
+def test_captains_for_original_name():
+    cfg = cfg_with({TG: {"2026-40": "Max"}})
+    assert kapitane.captains_for(cfg, {ALIAS, TG}) == {"2026-40": "Max"}
+
+
+def test_captains_for_ignores_case():
+    cfg = cfg_with({TG.upper(): {"2026-40": "Noah"}})
+    assert kapitane.captains_for(cfg, {ALIAS, TG.lower()}) == {"2026-40": "Noah"}
+
+
+def test_captains_for_merges_variants_and_ignores_other_teams():
+    cfg = cfg_with(
+        {
+            ALIAS: {"2026-40": "Lena"},
+            TG: {"2026-41": "Max"},
+            "Andere": {"2026-42": "Emma"},
+        }
+    )
+    assert kapitane.captains_for(cfg, {ALIAS, TG}) == {
+        "2026-40": "Lena",
+        "2026-41": "Max",
+    }
+    assert kapitane.captains_for(cfg, {"Unbekannt"}) == {}
+
+
+# ------------------------------------------------- one roster parser (T08)
+
+
+@pytest.mark.parametrize(
+    "teams",
+    [
+        {TG: ["Lena", "Max"], "Leer": []},
+        {
+            TG: {"kids": [{"name": "Lena", "number": 7}, {"name": "Max"}]},
+            "Leer": {"kids": []},
+        },
+    ],
+    ids=["flat", "structured"],
+)
+def test_roster_views_agree(tmp_path, teams):
+    path = tmp_path / "roster.json"
+    path.write_text(json.dumps({"teams": teams}), encoding="utf-8")
+    entries = kapitane.load_roster_entries(path)
+    names = kapitane.load_roster(path)
+    numbered = kapitane.load_roster_with_numbers(path)
+    assert names == {t: [k.name for k in kids] for t, kids in entries.items()}
+    assert numbered == {
+        t: [{"name": k.name, "number": k.number} for k in kids]
+        for t, kids in entries.items()
+    }
+    assert names[TG] == ["Lena", "Max"]

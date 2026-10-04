@@ -1,8 +1,8 @@
-"""Tests for games.py: games between two club teams (T06)."""
+"""Tests for games.py: deduplication (T06), sorting (T12)."""
 
 import csv
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -108,6 +108,26 @@ def test_shared_bfv_name_is_only_renamed_in_own_file(script_dir):
         ("FC 2", "Club B"),
         ("Club B", "FC 4"),
     }
+
+
+def game(datum, time):
+    d = datetime.strptime(datum, "%d.%m.%Y")
+    return {"date": d, "datum": datum, "time": time, "heim": "H", "gast": "G"}
+
+
+def test_group_by_day_sorts_times_numerically():
+    """T12: 9:00 comes before 10:00; games without time come last."""
+    day = [game("01.05.2026", t) for t in ("10:00", "", "9:00")]
+    days = games.group_by_day(day)
+    assert [g["time"] for g in days["01.05.2026"]] == ["9:00", "10:00", ""]
+
+
+def test_group_by_day_does_not_mutate_input():
+    """T12: the caller's list keeps its order."""
+    original = [game("02.05.2026", "10:00"), game("01.05.2026", "9:00")]
+    snapshot = list(original)
+    games.group_by_day(original)
+    assert original == snapshot
 
 
 def test_bare_club_name_in_other_file_is_not_renamed(script_dir):
