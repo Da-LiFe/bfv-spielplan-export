@@ -634,7 +634,7 @@ def build_lineup_pdf(
         ("Treffpunkt", f"{meet} Uhr" if meet else "-"),
         ("Formation", lineup.system or "-"),
         ("Kapitän der Woche", captain or "-"),
-        ("Kader", f"{len(lineup.startelf) + len(lineup.bank)} Spielerinnen"),
+        ("Kader", f"{len(lineup.startelf) + len(lineup.bank)} Spieler"),
     ]
     info = Table(
         [
@@ -887,4 +887,4 @@ def cli_main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    cli_main()
+    sys.exit(cli_main())

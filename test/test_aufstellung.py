@@ -529,7 +529,7 @@ def test_build_lineup_pdf_full(tmp_path):
     assert "09:00 Uhr" in text  # Treffpunkt
     assert "Kapitän der Woche" in text and "Mia" in text
     assert "3-2-1" in text
-    assert "Kader" in text and "8 Spielerinnen" in text
+    assert "Kader" in text and "8 Spieler" in text
     assert "Bank (1)" in text and "#8 Tim" in text
     assert "Bälle nicht vergessen!" in text
     assert "#1 Lukas:" in text and "Nagelschuhe mitbringen" in text

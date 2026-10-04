@@ -1,7 +1,7 @@
 /spielplan.html
 /spielplan.pdf
 /vereinsspielplan.pdf
-*_monthly.pdf
+*_spiele.pdf
 *_spiele_web.csv
 /kapitane.json
 /roster.json
@@ -16,10 +16,10 @@ reports/
 .bfv_cache/
 .venv/
 .mypy.sarif.json
+.coverage
 
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
 .beads-credential-key
 .beads/proxieddb/
-.bfv_cache/

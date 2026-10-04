@@ -69,12 +69,28 @@ def parse_date(value: Any) -> date | None:
     return None
 
 
+def parse_time(value: Any) -> str:
+    """Return a zero-padded time string for sorting (e.g. '09:00').
+
+    Accepts ``'9:00'``, ``'09:00'``, ``None`` and other types.
+    ``None`` returns ``'99:99'`` so missing times sort last.
+    """
+    if not value:
+        return "99:99"
+    s = str(value).strip()
+    # Handle 'H:MM' or 'HH:MM' → zero-pad the hour.
+    if ":" in s:
+        h, m = s.split(":", 1)
+        return f"{int(h):02d}:{m}"
+    return s
+
+
 def game_sort_key(game: dict[str, Any] | Any) -> Any:
     """Sort key for a game dict: by date, then time (missing → last)."""
     raw_date = game.get("date")
     if isinstance(raw_date, datetime):
         raw_date = raw_date.date()
-    return (raw_date or date.max, game.get("time") or "99:99")
+    return (raw_date or date.max, parse_time(game.get("time")))
 
 
 def match_team(candidates: Iterable[str], query: str) -> str | None:

@@ -31,7 +31,7 @@ from pdf_common import (
 from util import esc, maps_url, place_text
 
 
-def club_logo() -> Path | None:
+def _get_logo() -> Path | None:
     """Return the cached club logo (downloaded when stale) for PDF headers."""
     return aufstellung.get_logo(
         cache_path=SCRIPT_DIR / ".bfv_cache" / aufstellung.LOGO_CACHE_PATH.name

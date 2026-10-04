@@ -30,7 +30,8 @@ from games import (  # noqa: F401 (used by tests)
 )
 from pdf_common import german_now  # noqa: F401 (used by tests)
 from pdf_overview import build_pdf
-from pdf_team import build_team_pdf, club_logo
+from pdf_team import _get_logo as club_logo
+from pdf_team import build_team_pdf
 from render_html import (  # noqa: F401 (used by tests)
     build_html,
     render_day_section,
@@ -197,7 +198,7 @@ def main(argv: list[str] | None = None) -> None:
         "--out",
         default=None,
         help="Output path for the --team, --anwesenheit or --aufstellung PDF "
-        "(default: <slug>_monthly.pdf / anwesenheit.pdf / "
+        "(default: <slug>_spiele.pdf / anwesenheit.pdf / "
         "<slug>_aufstellung_<date>.pdf)",
     )
     ap.add_argument(
@@ -261,9 +262,7 @@ def main(argv: list[str] | None = None) -> None:
         next_games = next_games_for_team(games, team, args.next)
         if not next_games:
             sys.exit(f"Keine bevorstehenden Spiele f\u00fcr '{team}' gefunden.")
-        out = (
-            Path(args.out) if args.out else SCRIPT_DIR / f"{slugify(team)}_monthly.pdf"
-        )
+        out = Path(args.out) if args.out else SCRIPT_DIR / f"{slugify(team)}_spiele.pdf"
         cfg = kapitane.load_all(
             SCRIPT_DIR / kapitane.CONFIG_NAME, SCRIPT_DIR / kapitane.ROSTER_NAME
         )

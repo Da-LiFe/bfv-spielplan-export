@@ -19,6 +19,7 @@ from util import esc, maps_url
 
 def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
     """Serialize games to JSON for embedding in the HTML."""
+    # Escape </ to prevent premature closing of <script> tags.
     return json.dumps(
         [
             {
@@ -34,7 +35,15 @@ def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
             for g in day
         ],
         ensure_ascii=False,
-    )
+    ).replace("</", "\\u003c/")
+
+
+def render_aliases_js(sources: list) -> str:
+    """Serialize team aliases to JSON for embedding in the HTML."""
+    return json.dumps(
+        [[s["team"], s.get("original", s["team"])] for s in sources],
+        ensure_ascii=False,
+    ).replace("</", "\\u003c/")
 
 
 def render_game_row(g: Game, is_hot: bool) -> str:
@@ -131,10 +140,7 @@ def build_html(
         sections.append(render_day_section(datum, games))
 
     games_js = render_games_js(days)
-    aliases_js = json.dumps(
-        [[s["team"], s.get("original", s["team"])] for s in sources],
-        ensure_ascii=False,
-    )
+    aliases_js = render_aliases_js(sources)
 
     footer_html = render_footer(sources)
 

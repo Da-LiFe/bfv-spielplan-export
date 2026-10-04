@@ -652,7 +652,7 @@ def test_resolve_team_ambiguous():
 
 
 def test_build_team_pdf(tmp_path):
-    out = tmp_path / "team_monthly.pdf"
+    out = tmp_path / "team_spiele.pdf"
     team = "TSV Gilching/Argelsried U15"
     games = [
         make_relative_game(1, "10:00", team, "FC A"),
@@ -792,8 +792,8 @@ def test_main_team_pdf(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     vis.main(["--team", team, "--next", "2"])
     out = capsys.readouterr().out
-    assert "tsv-gilching-argelsried-u15_monthly.pdf" in out
-    assert (tmp_path / "tsv-gilching-argelsried-u15_monthly.pdf").exists()
+    assert "tsv-gilching-argelsried-u15_spiele.pdf" in out
+    assert (tmp_path / "tsv-gilching-argelsried-u15_spiele.pdf").exists()
     assert not (tmp_path / "spielplan.html").exists()
     assert not (tmp_path / "spielplan.pdf").exists()
 
@@ -1020,7 +1020,7 @@ def test_main_team_pdf_with_captain(monkeypatch, tmp_path):
     w1 = vis.kapitane.duty_week(date.today() + timedelta(days=3))
     helper_write_captain_config(tmp_path, team, assignments={w1: "Lena"})
     vis.main(["--team", team])
-    out = tmp_path / f"{slug_team(team)}_monthly.pdf"
+    out = tmp_path / f"{slug_team(team)}_spiele.pdf"
     assert out.exists()
     assert "Kapitän" in extract_text(str(out))
     assert "Lena" in extract_text(str(out))

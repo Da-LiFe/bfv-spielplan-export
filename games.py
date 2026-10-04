@@ -227,9 +227,9 @@ def load_games(
 
 def group_by_day(games: list[Game]) -> OrderedDict[str, list[Game]]:
     """Group games by date, sorted by date then time."""
-    games.sort(key=game_sort_key)
+    sorted_games = sorted(games, key=game_sort_key)
     days: OrderedDict[str, list[Game]] = OrderedDict()
-    for g in games:
+    for g in sorted_games:
         days.setdefault(g["datum"], []).append(g)
     return days
 
