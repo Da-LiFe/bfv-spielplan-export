@@ -208,7 +208,21 @@ def load_games(
                 source["team"] = alias
             club_teams.append(source["team"])
             sources.append(source)
-    return games, club_teams, sources
+
+    # Deduplicate: club-internal games appear in both CSVs.
+    # Primary key is the BFV game link; fallback to (date, time, heim, gast).
+    seen: set[tuple] = set()
+    unique: list[Game] = []
+    for g in games:
+        if g["link"]:
+            key: tuple = ("link", g["link"])
+        else:
+            key = ("fallback", g["datum"], g["time"], g["heim"], g["gast"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(g)
+
+    return unique, club_teams, sources
 
 
 def group_by_day(games: list[Game]) -> OrderedDict[str, list[Game]]:
