@@ -134,13 +134,13 @@ def load_games(
     """Load all games from *_spiele_web.csv files.
 
     When ``alias_map`` (URL -> display alias) contains the source URL of a
-    file, the club team's name is replaced by the alias in every game.
+    file, the club team's name is replaced by the alias in that file's games.
     """
     if alias_map is None:
         alias_map = load_alias_map()
-    games: list[Game] = []
     club_teams: list[str] = []
     sources: list[Source] = []
+    per_file: list[tuple[list[Game], Source]] = []
     for path in sorted(SCRIPT_DIR.glob("*_spiele_web.csv")):
         try:
             with open(path, encoding="utf-8-sig", newline="") as f:
@@ -190,7 +190,6 @@ def load_games(
                 f"Warnung: {skipped_teams} Zeile(n) in {path.name} ohne Heim/Gast-Team übersprungen",
                 file=sys.stderr,
             )
-        games.extend(file_games)
         if file_games:
             team, source = infer_team(
                 file_games, path.name, file_games[0].get("quelle", "")
@@ -198,31 +197,42 @@ def load_games(
             source["original"] = source["team"]
             alias = alias_map.get(source["url"])
             if alias:
-                for g in file_games:
-                    if g["heim"] == source["original"]:
-                        g["heim"] = alias
-                        g["home_color"] = team_color(alias)
-                    if g["gast"] == source["original"]:
-                        g["gast"] = alias
-                        g["away_color"] = team_color(alias)
                 source["team"] = alias
+            per_file.append((file_games, source))
             club_teams.append(source["team"])
             sources.append(source)
 
-    # Deduplicate: club-internal games appear in both CSVs.
-    # Primary key is the BFV game link; fallback to (date, time, heim, gast).
-    seen: set[tuple] = set()
+    # Club-internal games appear in both teams' CSVs. Keep one copy (key: BFV
+    # game link, else date/time/home/away with the raw BFV names, which are the
+    # same in both files) and give it *both* teams' aliases, so the overview
+    # lists it once and both team views still find it. Names are only renamed
+    # in a team's own file or in its own duplicate: a bare club name in another
+    # file (e.g. cup games) may refer to a different team.
+    seen: dict[tuple, Game] = {}
     unique: list[Game] = []
-    for g in games:
-        if g["link"]:
-            key: tuple = ("link", g["link"])
-        else:
-            key = ("fallback", g["datum"], g["time"], g["heim"], g["gast"])
-        if key not in seen:
-            seen.add(key)
-            unique.append(g)
+    for file_games, source in per_file:
+        for g in file_games:
+            if g["link"]:
+                key: tuple = ("link", g["link"])
+            else:
+                key = ("fallback", g["datum"], g["time"], g["heim"], g["gast"])
+            kept = seen.get(key)
+            if kept is None:
+                seen[key] = kept = g
+                unique.append(g)
+            _rename_team(kept, source["original"], source["team"])
 
     return unique, club_teams, sources
+
+
+def _rename_team(g: Game, original: str, alias: str) -> None:
+    """Replace ``original`` by ``alias`` as home or away team of ``g``."""
+    if g["heim"] == original:
+        g["heim"] = alias
+        g["home_color"] = team_color(alias)
+    if g["gast"] == original:
+        g["gast"] = alias
+        g["away_color"] = team_color(alias)
 
 
 def group_by_day(games: list[Game]) -> OrderedDict[str, list[Game]]:
