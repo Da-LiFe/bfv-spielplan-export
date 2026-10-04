@@ -29,6 +29,7 @@ import kapitane
 from config import (
     CLUB_MARKERS,
     CLUB_NAME,
+    CSV_DATE_FORMAT,
     LINK_COLOR,
     PALETTE,
     SCRIPT_DIR,

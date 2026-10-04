@@ -18,11 +18,20 @@ from pathlib import Path
 from typing import Any
 
 from config import SCRIPT_DIR, WD
+from util import load_json_lenient
 
 CONFIG_NAME = "kapitane.json"
 DEFAULT_CONFIG_PATH = SCRIPT_DIR / CONFIG_NAME
 ROSTER_NAME = "roster.json"
 DEFAULT_ROSTER_PATH = SCRIPT_DIR / ROSTER_NAME
+
+
+@dataclass
+class Kid:
+    """A roster entry with an optional shirt number."""
+
+    name: str
+    number: int | None = None
 
 
 def empty_config() -> dict[str, Any]:
@@ -53,46 +62,48 @@ def week_range(week_key: str) -> str:
     )
 
 
-def _parse_teams(raw_teams: dict) -> dict[str, list[str]]:
-    """Normalise raw teams dict into team -> [kid names] (both old and new format)."""
-    result: dict[str, list[str]] = {}
+def _parse_teams(raw_teams: dict) -> dict[str, list[Kid]]:
+    """Normalise raw teams dict into team -> [Kid] (both old and new format)."""
+    result: dict[str, list[Kid]] = {}
     for team, kids in raw_teams.items():
         if isinstance(kids, list):
             # Old flat format: ["Lena", "Max"]
-            result[str(team)] = [str(k) for k in kids if k]
+            result[str(team)] = [Kid(name=str(k), number=None) for k in kids if k]
         elif isinstance(kids, dict):
             # New format: {"kids": [{"name": "Lena", "number": 1}]}
             kid_list = kids.get("kids", [])
             if isinstance(kid_list, list):
                 result[str(team)] = [
-                    str(k["name"])
+                    Kid(name=str(k["name"]), number=k.get("number"))
                     for k in kid_list
                     if isinstance(k, dict) and k.get("name")
                 ]
     return result
 
 
-def load_roster(path: Path | None = None) -> dict[str, list[str]]:
-    """Load ``roster.json`` as a mapping of team -> kid names.
+def load_roster_entries(path: Path | None = None) -> dict[str, list[Kid]]:
+    """Load ``roster.json`` and return team -> [Kid] entries.
 
     Supports both the old flat format (``["Lena", "Max"]``) and the new
     structured format (``{"kids": [{"name": "Lena", "number": 1}]}``).
     """
     roster_path = path or DEFAULT_ROSTER_PATH
-    if not roster_path.exists():
-        return {}
-    try:
-        data = json.loads(roster_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        print(
-            f"{roster_path.name}: ungültiges JSON – kein Kader geladen.",
-            file=sys.stderr,
-        )
-        return {}
+    data = load_json_lenient(roster_path, {})
     raw_teams = data.get("teams") if isinstance(data, dict) else None
     if not isinstance(raw_teams, dict):
         return {}
     return _parse_teams(raw_teams)
+
+
+def load_roster(path: Path | None = None) -> dict[str, list[str]]:
+    """Load ``roster.json`` as a mapping of team -> kid names.
+
+    Convenience wrapper around ``load_roster_entries`` that returns only names.
+    """
+    return {
+        team: [k.name for k in kids]
+        for team, kids in load_roster_entries(path).items()
+    }
 
 
 def load_roster_with_numbers(
@@ -104,38 +115,10 @@ def load_roster_with_numbers(
     For the old flat format entries without numbers are returned as
     ``{"name": "Lena", "number": None}``.
     """
-    roster_path = path or DEFAULT_ROSTER_PATH
-    if not roster_path.exists():
-        return {}
-    try:
-        data = json.loads(roster_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        print(
-            f"{roster_path.name}: ungültiges JSON – kein Kader geladen.",
-            file=sys.stderr,
-        )
-        return {}
-    raw_teams = data.get("teams") if isinstance(data, dict) else None
-    if not isinstance(raw_teams, dict):
-        return {}
-    result: dict[str, list[dict[str, Any]]] = {}
-    for team, kids in raw_teams.items():
-        if isinstance(kids, list):
-            # Old flat format: ["Lena", "Max"]
-            result[str(team)] = [{"name": str(k), "number": None} for k in kids if k]
-        elif isinstance(kids, dict):
-            # New format: {"kids": [{"name": "Lena", "number": 1}]}
-            kid_list = kids.get("kids", [])
-            if isinstance(kid_list, list):
-                result[str(team)] = [
-                    {
-                        "name": str(k["name"]),
-                        "number": k.get("number"),
-                    }
-                    for k in kid_list
-                    if isinstance(k, dict) and k.get("name")
-                ]
-    return result
+    return {
+        team: [{"name": k.name, "number": k.number} for k in kids]
+        for team, kids in load_roster_entries(path).items()
+    }
 
 
 def save_roster(roster: dict[str, list[str]], path: Path | None = None) -> None:
