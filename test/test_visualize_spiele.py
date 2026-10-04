@@ -6,7 +6,9 @@ from datetime import date, timedelta
 import pytest
 from pdfminer.high_level import extract_text
 
+import games as games_module
 import kapitane
+import pdf_team
 import visualize_spiele as vis
 
 U15 = "TSV Gilching/Argelsried U15"
@@ -220,6 +222,7 @@ def test_load_alias_map_missing(tmp_path):
 def test_load_games(monkeypatch, tmp_path, capsys):
     write_fixtures(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     games, club_teams, sources = vis.load_games()
     assert len(games) == 5  # 4 rows in A (1 invalid) + 2 in B
     err = capsys.readouterr().err
@@ -247,6 +250,7 @@ def test_load_games(monkeypatch, tmp_path, capsys):
 
 def test_load_games_no_csvs(monkeypatch, tmp_path):
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     games, club_teams, sources = vis.load_games()
     assert games == []
     assert club_teams == []
@@ -290,6 +294,7 @@ def test_load_games_warns_on_missing_teams(monkeypatch, tmp_path, capsys):
         ],
     )
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     games, club_teams, sources = vis.load_games()
     assert len(games) == 1
     err = capsys.readouterr().err
@@ -299,6 +304,7 @@ def test_load_games_warns_on_missing_teams(monkeypatch, tmp_path, capsys):
 def test_load_games_with_aliases(monkeypatch, tmp_path):
     write_fixtures(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     alias_map = {"https://bfv/quelle-a": "TSV Gilching/Argelsried u15w"}
     games, club_teams, sources = vis.load_games(alias_map)
     assert club_teams == ["TSV Gilching/Argelsried u15w", U17]
@@ -562,6 +568,7 @@ def test_build_pdf(tmp_path):
 def test_main(monkeypatch, tmp_path, capsys):
     write_fixtures(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     vis.main([])
     assert (tmp_path / "spielplan.html").exists()
     assert (tmp_path / "spielplan.pdf").exists()
@@ -573,6 +580,7 @@ def test_main(monkeypatch, tmp_path, capsys):
 
 def test_main_no_csvs(monkeypatch, tmp_path):
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     with pytest.raises(SystemExit, match="Keine .*_spiele_web.csv Dateien gefunden"):
         vis.main([])
 
@@ -689,6 +697,8 @@ def test_club_logo_uses_cache_dir(monkeypatch, tmp_path):
         vis.aufstellung, "get_logo", lambda **kw: calls.append(kw) or None
     )
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(pdf_team, "SCRIPT_DIR", tmp_path)
     assert vis.club_logo() is None
     assert calls[0]["cache_path"].parent == tmp_path / ".bfv_cache"
 
@@ -698,6 +708,7 @@ def test_captains_assign_does_not_overwrite_roster_numbers(
 ):
     """Regression: --captains-assign must not delete shirt numbers from roster.json."""
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     # Create roster with numbers
     roster_data = {
         "teams": {
@@ -778,6 +789,7 @@ def test_main_team_pdf(monkeypatch, tmp_path, capsys):
         ],
     )
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     vis.main(["--team", team, "--next", "2"])
     out = capsys.readouterr().out
     assert "tsv-gilching-argelsried-u15_monthly.pdf" in out
@@ -805,6 +817,7 @@ def test_main_team_out_override(monkeypatch, tmp_path):
         ],
     )
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     custom = tmp_path / "custom.pdf"
     vis.main(["--team", team, "--out", str(custom)])
     assert custom.exists()
@@ -814,6 +827,7 @@ def test_main_team_out_override(monkeypatch, tmp_path):
 def test_main_team_unknown(monkeypatch, tmp_path):
     write_fixtures(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     with pytest.raises(SystemExit, match="nicht gefunden"):
         vis.main(["--team", "Nope"])
 
@@ -837,6 +851,7 @@ def test_main_team_no_upcoming(monkeypatch, tmp_path):
         ],
     )
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     with pytest.raises(SystemExit, match="Keine bevorstehenden Spiele"):
         vis.main(["--team", team])
 
@@ -844,6 +859,7 @@ def test_main_team_no_upcoming(monkeypatch, tmp_path):
 def test_main_team_next_zero(monkeypatch, tmp_path):
     write_fixtures(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     with pytest.raises(SystemExit, match="must be a positive"):
         vis.main(["--team", "TSV Gilching/Argelsried U15", "--next", "0"])
 
@@ -948,6 +964,7 @@ def test_main_captains_assign(monkeypatch, tmp_path, capsys):
     team = "TSV Gilching/Argelsried U15"
     helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     helper_write_captain_config(tmp_path, team)
     # Save the original roster content
     original_roster = (tmp_path / "roster.json").read_text(encoding="utf-8")
@@ -969,6 +986,7 @@ def test_main_captains_check_balanced(monkeypatch, tmp_path, capsys):
     helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
     helper_write_captain_csv(tmp_path, team, days=10, gast="FC B")
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     w1 = vis.kapitane.duty_week(date.today() + timedelta(days=3))
     w2 = vis.kapitane.duty_week(date.today() + timedelta(days=10))
     helper_write_captain_config(tmp_path, team, assignments={w1: "Lena", w2: "Max"})
@@ -982,6 +1000,7 @@ def test_main_captains_check_unbalanced(monkeypatch, tmp_path):
     for i, days in enumerate((2, 9, 16)):
         helper_write_captain_csv(tmp_path, team, days=days, gast=f"FC {i}", idx=i)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     weeks = {
         vis.kapitane.duty_week(date.today() + timedelta(days=d)) for d in (2, 9, 16)
     }
@@ -997,6 +1016,7 @@ def test_main_team_pdf_with_captain(monkeypatch, tmp_path):
     team = "TSV Gilching/Argelsried U15"
     helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     w1 = vis.kapitane.duty_week(date.today() + timedelta(days=3))
     helper_write_captain_config(tmp_path, team, assignments={w1: "Lena"})
     vis.main(["--team", team])
@@ -1033,6 +1053,7 @@ def helper_write_anwesenheit(tmp_path):
 def test_main_anwesenheit(monkeypatch, tmp_path, capsys):
     team = helper_write_anwesenheit(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     vis.main(["--anwesenheit"])
     out = tmp_path / vis.anwesenheit.PDF_NAME
     assert out.exists()
@@ -1046,6 +1067,7 @@ def test_main_anwesenheit(monkeypatch, tmp_path, capsys):
 def test_main_anwesenheit_team_filter(monkeypatch, tmp_path, capsys):
     team = helper_write_anwesenheit(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     vis.main(["--anwesenheit", "--team", team])
     out = tmp_path / f"{slug_team(team)}_anwesenheit.pdf"
     assert out.exists()
@@ -1057,6 +1079,7 @@ def test_main_anwesenheit_team_filter(monkeypatch, tmp_path, capsys):
 def test_main_anwesenheit_out_override(monkeypatch, tmp_path):
     helper_write_anwesenheit(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     out = tmp_path / "custom.pdf"
     vis.main(["--anwesenheit", "--out", str(out)])
     assert out.exists()
@@ -1065,12 +1088,14 @@ def test_main_anwesenheit_out_override(monkeypatch, tmp_path):
 def test_main_anwesenheit_unknown_team(monkeypatch, tmp_path):
     helper_write_anwesenheit(tmp_path)
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     with pytest.raises(SystemExit, match="nicht gefunden"):
         vis.main(["--anwesenheit", "--team", "Kein Team"])
 
 
 def test_main_anwesenheit_empty_data(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games_module, "SCRIPT_DIR", tmp_path)
     vis.main(["--anwesenheit"])
     out = tmp_path / vis.anwesenheit.PDF_NAME
     assert out.exists()

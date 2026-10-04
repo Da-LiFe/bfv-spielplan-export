@@ -13,7 +13,9 @@ from pdfminer.pdfparser import PDFParser
 from pdfminer.pdftypes import resolve1
 
 import aufstellung
+import games
 import kapitane
+import pdf_team
 import visualize_spiele as vis
 
 TEAM = "TSV Gilching/Argelsried U8"
@@ -589,6 +591,8 @@ def test_build_lineup_pdf_away_single_page(tmp_path):
 @pytest.fixture
 def cli_env(tmp_path, monkeypatch):
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(games, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(pdf_team, "SCRIPT_DIR", tmp_path)
     monkeypatch.setattr(aufstellung, "_download", lambda url: PNG)
     monkeypatch.setattr(aufstellung, "get_logo", lambda **kw: None)
     return tmp_path
