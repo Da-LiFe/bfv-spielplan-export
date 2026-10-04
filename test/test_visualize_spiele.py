@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 import pytest
 from pdfminer.high_level import extract_text
 
+import kapitane
 import visualize_spiele as vis
 
 U15 = "TSV Gilching/Argelsried U15"
@@ -688,6 +689,52 @@ def test_club_logo_uses_cache_dir(monkeypatch, tmp_path):
     assert calls[0]["cache_path"].parent == tmp_path / ".bfv_cache"
 
 
+def test_captains_assign_does_not_overwrite_roster_numbers(
+    monkeypatch, tmp_path, capsys
+):
+    """Regression: --captains-assign must not delete shirt numbers from roster.json."""
+    monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
+    # Create roster with numbers
+    roster_data = {
+        "teams": {
+            "U15": {
+                "kids": [{"name": "Mia", "number": 5}, {"name": "Lena", "number": 7}]
+            }
+        }
+    }
+    (tmp_path / kapitane.ROSTER_NAME).write_text(
+        json.dumps(roster_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    # Create captains config
+    cfg_data = {"teams": {"U15": ["Mia", "Lena"]}, "assignments": {}}
+    (tmp_path / kapitane.CONFIG_NAME).write_text(
+        json.dumps(cfg_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    # Create a dummy CSV so weeks are computed
+    t0 = date.today()
+    write_csv(
+        tmp_path / "team_x_spiele_web.csv",
+        [
+            {
+                "Wettbewerb": "U15",
+                "Datum": t0.strftime(vis.CSV_DATE_FORMAT),
+                "Uhrzeit": "10:00",
+                "Heim": "U15",
+                "Gast": "FC A",
+                "Spielort": "",
+                "Link": "",
+                "Quelle": "",
+            }
+        ],
+    )
+    games, _, sources = vis.load_games()
+    vis.handle_captains(games, sources, assign=True, check=False)
+    # Roster file must be unchanged
+    new_data = json.loads((tmp_path / kapitane.ROSTER_NAME).read_text(encoding="utf-8"))
+    assert new_data["teams"]["U15"]["kids"][0]["number"] == 5
+    assert new_data["teams"]["U15"]["kids"][1]["number"] == 7
+
+
 def test_main_team_pdf(monkeypatch, tmp_path, capsys):
     team = "TSV Gilching/Argelsried U15"
     t0 = date.today()
@@ -898,16 +945,16 @@ def test_main_captains_assign(monkeypatch, tmp_path, capsys):
     helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
     monkeypatch.setattr(vis, "SCRIPT_DIR", tmp_path)
     helper_write_captain_config(tmp_path, team)
+    # Save the original roster content
+    original_roster = (tmp_path / "roster.json").read_text(encoding="utf-8")
     vis.main(["--captains-assign"])
     cfg = json.loads((tmp_path / "kapitane.json").read_text(encoding="utf-8"))
     assigned = cfg["assignments"][team]
     assert len(assigned) == 1
     (kid,) = assigned.values()
-    roster_data = json.loads((tmp_path / "roster.json").read_text(encoding="utf-8"))
-    # New format: roster["teams"][team] is {"kids": [...]}
-    kids = roster_data["teams"][team].get("kids", [])
-    kid_names = [k["name"] if isinstance(k, dict) else k for k in kids]
-    assert kid in kid_names
+    # Roster file must be unchanged (numbers preserved)
+    new_roster = (tmp_path / "roster.json").read_text(encoding="utf-8")
+    assert new_roster == original_roster
     out = capsys.readouterr().out
     assert "Kapitän-Verteilung" in out
     assert "gleichmäßig" in out

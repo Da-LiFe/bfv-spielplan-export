@@ -862,8 +862,6 @@ def handle_captains(
     if assign:
         warnings = kapitane.ensure_assignments(cfg, weeks)
         kapitane.save_config(cfg, cfg_path)
-        if cfg["teams"]:
-            kapitane.save_roster(cfg["teams"], roster_path)
         print(f"{kapitane.ROSTER_NAME} / {kapitane.CONFIG_NAME} aktualisiert.")
         for warning in warnings:
             print(f"Warnung: {warning}", file=sys.stderr)
