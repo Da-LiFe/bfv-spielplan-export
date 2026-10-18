@@ -22,7 +22,7 @@ import visualize_spiele
 ROOT = Path(__file__).resolve().parent.parent
 CSV_HEADER = ["Wettbewerb", "Datum", "Uhrzeit", "Heim", "Gast", "Spielort", "Link"]
 CSV_HEADER += ["Quelle"]
-BFV_NAME = "TSV Gilching/Argelsried U15"
+BFV_NAME = "SV Testfeld U15"
 ALIAS = "U15 Alias"
 URL = "https://bfv/u15"
 

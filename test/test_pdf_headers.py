@@ -35,7 +35,7 @@ def overview_days():
         "datum": "02.05.2026",
         "wd": "Sa",
         "time": "10:00",
-        "heim": "TSV Gilching/Argelsried U15",
+        "heim": "SV Testfeld U15",
         "gast": "FC A",
         "wettbewerb": "Kreis",
         "spielort": "Platz",

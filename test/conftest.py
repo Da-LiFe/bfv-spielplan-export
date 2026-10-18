@@ -15,6 +15,14 @@ DATA_MODULES = (
 )
 
 
+@pytest.fixture(autouse=True)
+def _test_club_markers(monkeypatch):
+    """Match the artificial test club so ``is_home`` works without real names."""
+    monkeypatch.setattr(
+        importlib.import_module("games"), "CLUB_MARKERS", {"sv testfeld"}
+    )
+
+
 @pytest.fixture
 def script_dir(tmp_path, monkeypatch):
     """Point every module's ``SCRIPT_DIR`` at ``tmp_path`` and return it."""

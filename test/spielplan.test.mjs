@@ -41,23 +41,23 @@ const g = (offset, time, h, a, w, p, id) => ({
   w,
   p,
   l: `https://www.bfv.de/spiele/xyz/${id}`,
-  quelle: 'https://www.bfv.de/mannschaften/tsv-gilching-argelsried/0000000000000000000000',
+  quelle: 'https://www.bfv.de/mannschaften/sv-testfeld/0000000000000000000000',
 });
 
-const U15 = 'TSV Gilching/Argelsried U15';
-const U17 = 'TSV Gilching/Argelsried U17';
+const U15 = 'SV Testfeld U15';
+const U17 = 'SV Testfeld U17';
 const fileA = [
-  g(-12, '10:00', U15, 'FC Mustermann 1', 'U15 Kreis', 'Sportpark Gilching | Platz 1', 'a1'),
-  g(-2, '', U15, 'FC Mustermann 2', 'U15 Kreis', 'Sportpark Gilching | Platz 2', 'a2'),
-  g(0, '18:00', U15, 'FC Mustermann 1', 'U15 Kreis', 'Sportpark Gilching | Platz 1', 'a3'),
-  g(3, '14:00', U15, 'FC Mustermann 2', 'U15 Kreis', 'Sportpark Gilching | Platz 1', 'a4'),
+  g(-12, '10:00', U15, 'FC Mustermann 1', 'U15 Kreis', 'Sportpark Testfeld | Platz 1', 'a1'),
+  g(-2, '', U15, 'FC Mustermann 2', 'U15 Kreis', 'Sportpark Testfeld | Platz 2', 'a2'),
+  g(0, '18:00', U15, 'FC Mustermann 1', 'U15 Kreis', 'Sportpark Testfeld | Platz 1', 'a3'),
+  g(3, '14:00', U15, 'FC Mustermann 2', 'U15 Kreis', 'Sportpark Testfeld | Platz 1', 'a4'),
   g(3, '16:00', 'FC Mustermann 1', U15, 'U15 Kreis', 'Auswärts | Kunstrasen', 'a5'),
-  g(6, '', U15, 'FC Sonntag', 'U15 Kreis', 'Sportpark Gilching | Platz 2', 'a6'),
-  g(10, '22:00', U15, 'FC Semi; Kolon, Komma \\ Team', 'U15 Kreis', 'Sportpark Gilching | Platz 1', 'a7'),
+  g(6, '', U15, 'FC Sonntag', 'U15 Kreis', 'Sportpark Testfeld | Platz 2', 'a6'),
+  g(10, '22:00', U15, 'FC Semi; Kolon, Komma \\ Team', 'U15 Kreis', 'Sportpark Testfeld | Platz 1', 'a7'),
 ];
 const fileB = [
   g(20, '11:00', 'SV Beispiel', U17, 'U17 Kreis', 'Beispielhalle', 'b1'),
-  g(25, '13:00', U17, 'SV Anderer', 'U17 Kreis', 'Sportpark Gilching | Platz 3', 'b2'),
+  g(25, '13:00', U17, 'SV Anderer', 'U17 Kreis', 'Sportpark Testfeld | Platz 3', 'b2'),
 ];
 const GAMES = [...fileA, ...fileB];
 
@@ -410,7 +410,7 @@ section('.ics export (all teams, hide past)');
   const lateDend = icsEndExpected(late.datum, '22:00');
   check(txt.includes(`DTEND;TZID=Europe/Berlin:${lateDend}`), `late game DTEND rolls over (${lateDend})`);
   check(
-    txt.includes('SUMMARY:TSV Gilching/Argelsried U15 - FC Semi\\; Kolon\\, Komma \\\\ Team'),
+    txt.includes('SUMMARY:SV Testfeld U15 - FC Semi\\; Kolon\\, Komma \\\\ Team'),
     'ics escaping of ; , \\ in SUMMARY',
   );
 }
@@ -421,7 +421,7 @@ section('.ics export (single team slug)');
   s.teamChecks[0].checked = true;
   fire(s.teamChecks[0], 'change');
   fire(s.icsBtn, 'click');
-  check(s.body.lastChild.download === 'spielplan_tsv-gilching-argelsried-u15.ics', 'slug filename for single team');
+  check(s.body.lastChild.download === 'spielplan_sv-testfeld-u15.ics', 'slug filename for single team');
 }
 
 console.log(failures ? `\n${failures} test(s) FAILED` : '\nAll tests passed.');

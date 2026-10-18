@@ -18,7 +18,7 @@ import kapitane
 import spielplan
 import visualize_spiele as vis
 
-TEAM = "TSV Gilching/Argelsried U8"
+TEAM = "SV Testfeld U8"
 PNG = aufstellung.PNG_MAGIC + b"rest"
 CSV_HEADER = [
     "Wettbewerb",
@@ -517,7 +517,7 @@ def test_build_lineup_pdf_full(tmp_path):
         kickoff="10:00",
         competition="U8 Kreis",
         is_home=True,
-        spielort="Sportanlage | Waldplatz 2 | 82205 Gilching",
+        spielort="Sportanlage | Waldplatz 2 | 12345 Testfeld",
     )
     aufstellung.build_lineup_pdf(
         make_lineup(), out, game, "Mia", logo=real_logo(tmp_path)
@@ -540,15 +540,15 @@ def test_build_lineup_pdf_shows_address_and_map_link(tmp_path):
     out = tmp_path / "ort.pdf"
     game = aufstellung.GameInfo(
         opponent="FC Gegner",
-        spielort="Sportanlage Gilching | Waldplatz 2 | 82205 Gilching",
+        spielort="Sportanlage Testfeld | Waldplatz 2 | 12345 Testfeld",
     )
     aufstellung.build_lineup_pdf(make_lineup(), out, game)
     text = extract_text(str(out))
-    assert "Sportanlage Gilching, Waldplatz 2, 82205 Gilching" in text
+    assert "Sportanlage Testfeld, Waldplatz 2, 12345 Testfeld" in text
     assert "Karte" in text
     maps = [u for u in pdf_links(out) if "google.com/maps" in u]
     assert len(maps) == 1
-    assert "Sportanlage%20Gilching" in maps[0]
+    assert "Sportanlage%20Testfeld" in maps[0]
 
 
 def test_build_lineup_pdf_without_game(tmp_path, capsys):
@@ -623,7 +623,7 @@ def test_main_aufstellung_with_game_and_captain(cli_env, capsys):
     captured = capsys.readouterr()
     assert "gegen FC Gegner" in captured.out
     assert "Jonas (Bank) hat keine Rückennummer" in captured.err
-    out = cli_env / f"tsv-gilching-argelsried-u8_aufstellung_{day.isoformat()}.pdf"
+    out = cli_env / f"sv-testfeld-u8_aufstellung_{day.isoformat()}.pdf"
     text = extract_text(str(out))
     assert "10:30 Uhr" in text
     assert "Hannah" in text

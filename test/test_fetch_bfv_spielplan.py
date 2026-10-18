@@ -14,7 +14,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 REAL_HTML = (FIXTURES / "bfv_sample.html").read_text(encoding="utf-8")
 
 TEAM_ID = "02Q0KPORKS000000VS5489B2VTB2M2VN"
-TEAM_URL = f"https://www.bfv.de/mannschaften/tsv-gilching-argelsried-2-7/{TEAM_ID}"
+TEAM_URL = f"https://www.bfv.de/mannschaften/sv-testfeld-2-7/{TEAM_ID}"
 
 
 def entry(**kw):
@@ -23,9 +23,9 @@ def entry(**kw):
         "link": "https://www.bfv.de/ergebnisse/spiel/-/03",
         "datum": "20.09.2026",
         "zeit": "09:00",
-        "team0": "TSV Gilching/Argelsried 2 (7)",
-        "team1": "TSV Herrsching (7)",
-        "location": "Sportanlage Gilching, Waldplatz 2 | Talhofstraße 13 | 82205 Gilching",
+        "team0": "SV Testfeld 2 (7)",
+        "team1": "SV Nachbarort (7)",
+        "location": "Sportanlage Testfeld, Musterweg 2 | Musterstraße 13 | 12345 Testfeld",
     }
     defaults.update(kw)
     parts = ['<div class="bfv-spieltag-eintrag">']
@@ -65,11 +65,11 @@ SHOWMORE = '<div class="js-lazyload-filter-showmore"></div>'
 
 
 def test_clean_strips_tags():
-    assert fetch.clean("<div><b>TSV</b> Gilching</div>") == "TSV Gilching"
+    assert fetch.clean("<div><b>SV</b> Testfeld</div>") == "SV Testfeld"
 
 
 def test_clean_removes_wbr():
-    assert fetch.clean("Gil<wbr>ching") == "Gilching"
+    assert fetch.clean("Test<wbr>feld") == "Testfeld"
 
 
 def test_clean_unescapes_entities():
@@ -90,9 +90,9 @@ def test_parse_entries_real_bfv_html():
     assert r0["Wettbewerb"] == "U15 (C-Jun.) Norweger Modell 03"
     assert r0["Datum"] == "20.09.2026"
     assert r0["Uhrzeit"] == "09:00"
-    assert r0["Heim"] == "TSV Gilching/Argelsried 2 (7)"
-    assert r0["Gast"] == "TSV Herrsching (7)"
-    assert r0["Spielort"].startswith("Sportanlage Gilching")
+    assert r0["Heim"] == "SV Testfeld 2 (7)"
+    assert r0["Gast"] == "SV Nachbarort (7)"
+    assert r0["Spielort"].startswith("Sportanlage Testfeld")
     assert r0["Link"].startswith("https://www.bfv.de/")
 
 
@@ -217,18 +217,18 @@ FAKE_ROWS = [
         "Wettbewerb": "U15 Kreis",
         "Datum": "20.09.2026",
         "Uhrzeit": "09:00",
-        "Heim": "TSV Gilching/Argelsried 2 (7)",
-        "Gast": "TSV Herrsching (7)",
-        "Spielort": "Sportanlage Gilching",
+        "Heim": "SV Testfeld 2 (7)",
+        "Gast": "SV Nachbarort (7)",
+        "Spielort": "Sportanlage Testfeld",
         "Link": "https://www.bfv.de/ergebnisse/spiel/-/03",
     },
     {
         "Wettbewerb": "U15 Kreis",
         "Datum": "27.09.2026",
         "Uhrzeit": "09:30",
-        "Heim": "(SG) FC Frauenwies LL (9)",
-        "Gast": "TSV Gilching/Argelsried 2 (7)",
-        "Spielort": "Sportplatz Stoffen",
+        "Heim": "(SG) FC Musterwies LL (9)",
+        "Gast": "SV Testfeld 2 (7)",
+        "Spielort": "Sportplatz Musterried",
         "Link": "https://www.bfv.de/ergebnisse/spiel/-/04",
     },
 ]
@@ -239,7 +239,7 @@ def test_fetch_one_writes_utf8_bom_csv(tmp_path, monkeypatch):
     out_path, n = fetch.fetch_one(TEAM_URL)
     assert out_path.parent == tmp_path
     assert n == 2
-    assert out_path.name == "tsv-gilching-argelsried-2-7_spiele_web.csv"
+    assert out_path.name == "sv-testfeld-2-7_spiele_web.csv"
     raw = out_path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")
     with open(out_path, encoding="utf-8-sig", newline="") as fh:
@@ -256,10 +256,8 @@ def test_fetch_one_writes_utf8_bom_csv(tmp_path, monkeypatch):
         ]
         rows = list(reader)
     assert len(rows) == 2
-    assert rows[0]["Heim"] == "TSV Gilching/Argelsried 2 (7)"
-    expected_source = (
-        f"https://www.bfv.de/mannschaften/tsv-gilching-argelsried-2-7/{TEAM_ID}"
-    )
+    assert rows[0]["Heim"] == "SV Testfeld 2 (7)"
+    expected_source = f"https://www.bfv.de/mannschaften/sv-testfeld-2-7/{TEAM_ID}"
     assert all(r["Quelle"] == expected_source for r in rows)
 
 
@@ -279,7 +277,7 @@ TEAMS_JSON = [
     {"url": TEAM_URL},
     {
         "url": "https://www.bfv.de/mannschaften/tsv-slug/02R2MA58DK000000VS5489B2VS0BVSMI",
-        "alias": "TSV Gilching/Argelsried u11w",
+        "alias": "SV Testfeld u11w",
     },
 ]
 
@@ -291,7 +289,7 @@ def test_load_teams_json(tmp_path):
         {"url": TEAM_URL, "alias": None},
         {
             "url": "https://www.bfv.de/mannschaften/tsv-slug/02R2MA58DK000000VS5489B2VS0BVSMI",
-            "alias": "TSV Gilching/Argelsried u11w",
+            "alias": "SV Testfeld u11w",
         },
     ]
 
@@ -481,7 +479,7 @@ def test_run_fetch_single_url(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(fetch, "fetch_all_matches", lambda team_id: FAKE_ROWS)
     assert fetch.run_fetch(TEAM_URL, teams=str(tmp_path / "teams.json")) == 0
     assert "Wrote 2 matches to" in capsys.readouterr().out
-    assert (tmp_path / "tsv-gilching-argelsried-2-7_spiele_web.csv").exists()
+    assert (tmp_path / "sv-testfeld-2-7_spiele_web.csv").exists()
 
 
 def test_run_fetch_output_copy(tmp_path, monkeypatch):
@@ -489,8 +487,7 @@ def test_run_fetch_output_copy(tmp_path, monkeypatch):
     copy = tmp_path / "copy.csv"
     fetch.run_fetch(TEAM_URL, str(copy), teams=str(tmp_path / "teams.json"))
     assert (
-        copy.read_bytes()
-        == (tmp_path / "tsv-gilching-argelsried-2-7_spiele_web.csv").read_bytes()
+        copy.read_bytes() == (tmp_path / "sv-testfeld-2-7_spiele_web.csv").read_bytes()
     )
 
 

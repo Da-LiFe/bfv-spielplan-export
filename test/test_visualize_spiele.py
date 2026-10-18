@@ -18,8 +18,8 @@ import render_html
 import util
 import visualize_spiele as vis
 
-U15 = "TSV Gilching/Argelsried U15"
-U17 = "TSV Gilching/Argelsried U17"
+U15 = "SV Testfeld U15"
+U17 = "SV Testfeld U17"
 
 
 @pytest.fixture(autouse=True)
@@ -57,7 +57,7 @@ def write_fixtures(tmp_path):
                 "Uhrzeit": "09:00",
                 "Heim": U15,
                 "Gast": "FC Beispiel 1",
-                "Spielort": "Sportpark Gilching",
+                "Spielort": "Sportpark Testfeld",
                 "Link": "https://x/1",
                 "Quelle": "https://bfv/quelle-a",
             },
@@ -77,7 +77,7 @@ def write_fixtures(tmp_path):
                 "Uhrzeit": "14:00",
                 "Heim": U15,
                 "Gast": "FC Beispiel 2",
-                "Spielort": "Sportpark Gilching",
+                "Spielort": "Sportpark Testfeld",
                 "Link": "https://x/3",
                 "Quelle": "https://bfv/quelle-a",
             },
@@ -162,9 +162,9 @@ def test_team_color_empty_is_grey():
 
 
 def test_team_color_deterministic():
-    assert games_module.team_color(
-        "TSV Gilching/Argelsried U15"
-    ) == games_module.team_color("TSV Gilching/Argelsried U15")
+    assert games_module.team_color("SV Testfeld U15") == games_module.team_color(
+        "SV Testfeld U15"
+    )
 
 
 # ------------------------------------------------------------- short_place()
@@ -270,7 +270,7 @@ def test_load_games_warns_on_missing_teams(monkeypatch, tmp_path, capsys):
                 "Uhrzeit": "09:00",
                 "Heim": U15,
                 "Gast": "FC Beispiel 1",
-                "Spielort": "Sportpark Gilching",
+                "Spielort": "Sportpark Testfeld",
                 "Link": "https://x/1",
                 "Quelle": "https://bfv/quelle-a",
             },
@@ -290,7 +290,7 @@ def test_load_games_warns_on_missing_teams(monkeypatch, tmp_path, capsys):
                 "Uhrzeit": "14:00",
                 "Heim": "",
                 "Gast": "FC Beispiel 2",
-                "Spielort": "Sportpark Gilching",
+                "Spielort": "Sportpark Testfeld",
                 "Link": "https://x/3",
                 "Quelle": "https://bfv/quelle-a",
             },
@@ -304,18 +304,18 @@ def test_load_games_warns_on_missing_teams(monkeypatch, tmp_path, capsys):
 
 def test_load_games_with_aliases(monkeypatch, tmp_path):
     write_fixtures(tmp_path)
-    alias_map = {"https://bfv/quelle-a": "TSV Gilching/Argelsried u15w"}
+    alias_map = {"https://bfv/quelle-a": "SV Testfeld u15w"}
     games, club_teams, sources = games_module.load_games(alias_map)
-    assert club_teams == ["TSV Gilching/Argelsried u15w", U17]
+    assert club_teams == ["SV Testfeld u15w", U17]
     by_file = {s["file"]: s for s in sources}
-    assert by_file["tsv-a_spiele_web.csv"]["team"] == "TSV Gilching/Argelsried u15w"
+    assert by_file["tsv-a_spiele_web.csv"]["team"] == "SV Testfeld u15w"
     assert by_file["tsv-a_spiele_web.csv"]["original"] == U15
     assert by_file["tsv-b_spiele_web.csv"]["team"] == U17
 
-    home = [g for g in games if g["heim"] == "TSV Gilching/Argelsried u15w"]
+    home = [g for g in games if g["heim"] == "SV Testfeld u15w"]
     assert len(home) == 2
     assert all(g["is_home"] for g in home)
-    away = next(g for g in games if g["gast"] == "TSV Gilching/Argelsried u15w")
+    away = next(g for g in games if g["gast"] == "SV Testfeld u15w")
     assert away["is_home"] is False
     assert all(U15 not in g.values() for g in home)
 
@@ -347,7 +347,7 @@ def test_render_game_row_home():
     row = render_html.render_game_row(g, is_hot=False)
     assert 'class="tag home"' in row
     assert 'title="Heimspiel"' in row
-    assert 'data-heim="TSV Gilching/Argelsried U15"' in row
+    assert 'data-heim="SV Testfeld U15"' in row
     assert 'data-gast="FC Gegner"' in row
     assert "vs</span></td>" in row
 
@@ -395,18 +395,16 @@ def test_render_day_section_normal():
 
 def test_render_team_checks():
     html = render_html.render_team_checks([U15, U17])
-    assert 'value="TSV Gilching/Argelsried U15"' in html
-    assert 'value="TSV Gilching/Argelsried U17"' in html
-    assert 'data-team="TSV Gilching/Argelsried U15"' in html
+    assert 'value="SV Testfeld U15"' in html
+    assert 'value="SV Testfeld U17"' in html
+    assert 'data-team="SV Testfeld U15"' in html
     assert html.count('<input type="checkbox"') == 2
 
 
 def test_render_team_checks_with_aliases():
-    html = render_html.render_team_checks(
-        ["TSV Gilching/Argelsried u15w", "TSV Gilching/Argelsried u17w"]
-    )
-    assert 'value="TSV Gilching/Argelsried u15w"' in html
-    assert 'value="TSV Gilching/Argelsried u17w"' in html
+    html = render_html.render_team_checks(["SV Testfeld u15w", "SV Testfeld u17w"])
+    assert 'value="SV Testfeld u15w"' in html
+    assert 'value="SV Testfeld u17w"' in html
 
 
 # --------------------------------------------------------- render_footer()
@@ -467,25 +465,21 @@ def test_build_html(tmp_path):
             make_game(
                 "20.09.2026",
                 "10:00",
-                "TSV Gilching/Argelsried & Co",
+                "SV Testfeld & Co",
                 "FC <i>Gast</i>",
-                spielort="Sportpark | Gilching",
+                spielort="Sportpark | Testfeld",
             )
         ],
         "27.09.2026": [
-            make_game(
-                "27.09.2026", "14:00", "TSV Gilching/Argelsried & Co", "FC Gast 2"
-            ),
-            make_game(
-                "27.09.2026", "16:00", "FC Gast 3", "TSV Gilching/Argelsried & Co"
-            ),
+            make_game("27.09.2026", "14:00", "SV Testfeld & Co", "FC Gast 2"),
+            make_game("27.09.2026", "16:00", "FC Gast 3", "SV Testfeld & Co"),
         ],
     }
-    clubs = ["TSV Gilching/Argelsried & Co"]
+    clubs = ["SV Testfeld & Co"]
     sources = [
         {
             "file": "x.csv",
-            "team": "TSV Gilching/Argelsried & Co",
+            "team": "SV Testfeld & Co",
             "url": "https://bfv/x",
         }
     ]
@@ -495,9 +489,9 @@ def test_build_html(tmp_path):
     assert "const SPIELE = " in html
     assert 'data-datum="20.09.2026"' in html
     assert 'data-datum="27.09.2026"' in html
-    assert 'data-heim="TSV Gilching/Argelsried &amp; Co"' in html
+    assert 'data-heim="SV Testfeld &amp; Co"' in html
     assert 'data-gast="FC &lt;i&gt;Gast&lt;/i&gt;"' in html
-    assert 'value="TSV Gilching/Argelsried &amp; Co"' in html
+    assert 'value="SV Testfeld &amp; Co"' in html
     assert 'class="day-header hot"' in html
     assert "⚠ 2 Spiele" in html
     assert "3 Spiele · 2 Spieltage ·" in html
@@ -524,27 +518,22 @@ def test_build_html_embeds_alias_map(tmp_path):
     out = tmp_path / "spielplan.html"
     days = {
         "20.09.2026": [
-            make_game(
-                "20.09.2026", "10:00", "TSV Gilching/Argelsried 2 (7)", "FC Gegner"
-            )
+            make_game("20.09.2026", "10:00", "SV Testfeld 2 (7)", "FC Gegner")
         ]
     }
-    clubs = ["TSV Gilching/Argelsried u15w2"]
+    clubs = ["SV Testfeld u15w2"]
     sources = [
         {
             "file": "x.csv",
-            "team": "TSV Gilching/Argelsried u15w2",
+            "team": "SV Testfeld u15w2",
             "url": "https://bfv/x",
-            "original": "TSV Gilching/Argelsried 2 (7)",
+            "original": "SV Testfeld 2 (7)",
         }
     ]
     render_html.build_html(days, clubs, sources, out)
     html = out.read_text(encoding="utf-8")
-    assert (
-        'const TEAM_ALIASES = [["TSV Gilching/Argelsried u15w2", "TSV Gilching/Argelsried 2 (7)"]]'
-        in html
-    )
-    assert 'value="TSV Gilching/Argelsried u15w2"' in html
+    assert 'const TEAM_ALIASES = [["SV Testfeld u15w2", "SV Testfeld 2 (7)"]]' in html
+    assert 'value="SV Testfeld u15w2"' in html
     assert "aliasToOriginal" in html
 
 
@@ -555,17 +544,11 @@ def test_build_pdf(tmp_path):
     out = tmp_path / "spielplan.pdf"
     days = {
         "20.09.2026": [
-            make_game(
-                "20.09.2026", "10:00", "TSV Gilching/Argelsried U15", "FC Beispiel 1"
-            )
+            make_game("20.09.2026", "10:00", "SV Testfeld U15", "FC Beispiel 1")
         ],
         "27.09.2026": [
-            make_game(
-                "27.09.2026", "14:00", "TSV Gilching/Argelsried U15", "FC Beispiel 2"
-            ),
-            make_game(
-                "27.09.2026", "16:00", "FC Beispiel 3", "TSV Gilching/Argelsried U15"
-            ),
+            make_game("27.09.2026", "14:00", "SV Testfeld U15", "FC Beispiel 2"),
+            make_game("27.09.2026", "16:00", "FC Beispiel 3", "SV Testfeld U15"),
         ],
     }
     pdf_overview.build_pdf(days, out)
@@ -597,14 +580,8 @@ def test_main_no_csvs(monkeypatch, tmp_path):
 
 def test_slugify():
     assert games_module.slugify("") == ""
-    assert (
-        games_module.slugify("TSV Gilching/Argelsried u13-2")
-        == "tsv-gilching-argelsried-u13-2"
-    )
-    assert (
-        games_module.slugify("TSV Gilching/Argelsried (7) u15w2")
-        == "tsv-gilching-argelsried-7-u15w2"
-    )
+    assert games_module.slugify("SV Testfeld u13-2") == "sv-testfeld-u13-2"
+    assert games_module.slugify("SV Testfeld (7) u15w2") == "sv-testfeld-7-u15w2"
     assert games_module.slugify("  A b C  ") == "a-b-c"
 
 
@@ -614,7 +591,7 @@ def make_relative_game(days, time, heim, gast, **kw):
 
 
 def test_next_games_for_team_filters_sorts_and_caps():
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     past = make_relative_game(-2, "09:00", team, "FC Alt")
     same_day_later = make_relative_game(1, "12:00", "FC Fremd", team)
     upcoming_3d = make_relative_game(3, "10:00", team, "FC B")
@@ -630,7 +607,7 @@ def test_next_games_for_team_filters_sorts_and_caps():
 
 
 def test_next_games_for_team_no_upcoming():
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     games = [make_relative_game(-2, "09:00", team, "FC Alt")]
     assert games_module.next_games_for_team(games, team, 4) == []
 
@@ -661,7 +638,7 @@ def test_resolve_team_ambiguous():
 
 def test_build_team_pdf(tmp_path):
     out = tmp_path / "team_spiele.pdf"
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     games = [
         make_relative_game(1, "10:00", team, "FC A"),
         make_relative_game(3, "14:00", "FC B", team),
@@ -678,9 +655,9 @@ def test_build_team_pdf(tmp_path):
     assert out.exists()
     assert out.read_bytes()[:4] == b"%PDF"
     text = extract_text(str(out))
-    assert "TSV Gilching/Argelsried" in text
+    assert "SV Testfeld" in text
     assert "Überblick Spieltage" in text
-    assert "TSV Gilching/Argelsried U15\n" in text  # full name, own line
+    assert "SV Testfeld U15\n" in text  # full name, own line
     assert "\nNächste 2 Spiele ab" in text
     assert "NÄCHSTE SPIELE" not in text
     assert "Heimspiel" in text and "Auswärtsspiel" in text  # legend kept
@@ -752,7 +729,7 @@ def test_captains_assign_does_not_overwrite_roster_numbers(
 
 
 def test_main_team_pdf(monkeypatch, tmp_path, capsys):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     t0 = date.today()
     write_csv(
         tmp_path / "team_x_spiele_web.csv",
@@ -791,14 +768,14 @@ def test_main_team_pdf(monkeypatch, tmp_path, capsys):
     )
     vis.main(["--team", team, "--next", "2"])
     out = capsys.readouterr().out
-    assert "tsv-gilching-argelsried-u15_spiele.pdf" in out
-    assert (tmp_path / "tsv-gilching-argelsried-u15_spiele.pdf").exists()
+    assert "sv-testfeld-u15_spiele.pdf" in out
+    assert (tmp_path / "sv-testfeld-u15_spiele.pdf").exists()
     assert not (tmp_path / "spielplan.html").exists()
     assert not (tmp_path / "spielplan.pdf").exists()
 
 
 def test_main_team_out_override(monkeypatch, tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     t0 = date.today()
     write_csv(
         tmp_path / "team_x_spiele_web.csv",
@@ -828,7 +805,7 @@ def test_main_team_unknown(monkeypatch, tmp_path):
 
 
 def test_main_team_no_upcoming(monkeypatch, tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     t0 = date.today()
     write_csv(
         tmp_path / "team_x_spiele_web.csv",
@@ -852,7 +829,7 @@ def test_main_team_no_upcoming(monkeypatch, tmp_path):
 def test_main_team_next_zero(monkeypatch, tmp_path):
     write_fixtures(tmp_path)
     with pytest.raises(SystemExit, match="must be a positive"):
-        vis.main(["--team", "TSV Gilching/Argelsried U15", "--next", "0"])
+        vis.main(["--team", "SV Testfeld U15", "--next", "0"])
 
 
 # ------------------------------------------------------------------- Kapitän
@@ -893,7 +870,7 @@ def helper_write_captain_config(tmp_path, team, assignments=None):
 
 
 def test_build_team_pdf_with_captain_row(tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     games = [
         make_relative_game(1, "10:00", team, "FC A"),
         make_relative_game(9, "14:00", "FC B", team),
@@ -920,7 +897,7 @@ def test_build_team_pdf_with_captain_row(tmp_path):
 
 
 def test_build_team_pdf_without_captain_config(tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     games = [make_relative_game(1, "10:00", team, "FC A")]
     sources = [
         {
@@ -936,7 +913,7 @@ def test_build_team_pdf_without_captain_config(tmp_path):
 
 
 def test_build_team_pdf_captain_folgt_placeholder(tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     games = [make_relative_game(1, "10:00", team, "FC A")]
     sources = [
         {
@@ -954,7 +931,7 @@ def test_build_team_pdf_captain_folgt_placeholder(tmp_path):
 
 
 def test_main_captains_assign(monkeypatch, tmp_path, capsys):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
     helper_write_captain_config(tmp_path, team)
     # Save the original roster content
@@ -973,7 +950,7 @@ def test_main_captains_assign(monkeypatch, tmp_path, capsys):
 
 
 def test_main_captains_check_balanced(monkeypatch, tmp_path, capsys):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
     helper_write_captain_csv(tmp_path, team, days=10, gast="FC B")
     w1 = kapitane.duty_week(date.today() + timedelta(days=3))
@@ -985,7 +962,7 @@ def test_main_captains_check_balanced(monkeypatch, tmp_path, capsys):
 
 
 def test_main_captains_check_unbalanced(monkeypatch, tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     for i, days in enumerate((2, 9, 16)):
         helper_write_captain_csv(tmp_path, team, days=days, gast=f"FC {i}", idx=i)
     weeks = {kapitane.duty_week(date.today() + timedelta(days=d)) for d in (2, 9, 16)}
@@ -998,7 +975,7 @@ def test_main_captains_check_unbalanced(monkeypatch, tmp_path):
 
 
 def test_main_team_pdf_with_captain(monkeypatch, tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     helper_write_captain_csv(tmp_path, team, days=3, gast="FC A")
     w1 = kapitane.duty_week(date.today() + timedelta(days=3))
     helper_write_captain_config(tmp_path, team, assignments={w1: "Lena"})
@@ -1010,7 +987,7 @@ def test_main_team_pdf_with_captain(monkeypatch, tmp_path):
 
 
 def helper_write_anwesenheit(tmp_path):
-    team = "TSV Gilching/Argelsried U15"
+    team = "SV Testfeld U15"
     (tmp_path / "anwesenheit.json").write_text(
         json.dumps(
             {
@@ -1022,7 +999,7 @@ def helper_write_anwesenheit(tmp_path):
                     },
                     {
                         "date": "2026-09-14",
-                        "team": "TSV Gilching/Argelsried U17",
+                        "team": "SV Testfeld U17",
                         "values": {"Emma": "P", "Paul": "N"},
                     },
                 ]
@@ -1040,7 +1017,7 @@ def test_main_anwesenheit(monkeypatch, tmp_path, capsys):
     assert out.exists()
     text = extract_text(str(out))
     assert team in text
-    assert "TSV Gilching/Argelsried U17" in text
+    assert "SV Testfeld U17" in text
     assert "Lena" in text
     assert capsys.readouterr().out.count("Team(s)") == 1
 

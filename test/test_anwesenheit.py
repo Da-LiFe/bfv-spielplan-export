@@ -11,8 +11,8 @@ import spielplan
 
 PlayerStats = anwesenheit.PlayerStats
 
-TG = "TSV Gilching/Argelsried u13-2"
-TG2 = "TSV Gilching/Argelsried u16w"
+TG = "SV Testfeld u13-2"
+TG2 = "SV Testfeld u16w"
 
 
 def raw_session(day, team=TG, values=None):

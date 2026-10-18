@@ -6,7 +6,7 @@ import pytest
 import config
 import kapitane
 
-TG = "TSV Gilching/Argelsried u13-2"
+TG = "SV Testfeld u13-2"
 
 
 def make_game(days, heim, gast):
