@@ -6,8 +6,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VISUALIZE = path.join(REPO_ROOT, 'visualize_spiele.py');
-const CONFIG = path.join(REPO_ROOT, 'config.py');
+const MAIN = path.join(REPO_ROOT, 'spielplan.py');
 
 let failures = 0;
 function check(cond, label) {
@@ -53,6 +52,7 @@ const fileA = [
   g(3, '14:00', U15, 'FC Mustermann 2', 'U15 Kreis', 'Sportpark Testfeld | Platz 1', 'a4'),
   g(3, '16:00', 'FC Mustermann 1', U15, 'U15 Kreis', 'Auswärts | Kunstrasen', 'a5'),
   g(6, '', U15, 'FC Sonntag', 'U15 Kreis', 'Sportpark Testfeld | Platz 2', 'a6'),
+  g(8, '13:00-17:00', U15, 'FC Turnier', 'Turnier', 'Halle | Platz 1', 'a8'),
   g(10, '22:00', U15, 'FC Semi; Kolon, Komma \\ Team', 'U15 Kreis', 'Sportpark Testfeld | Platz 1', 'a7'),
 ];
 const fileB = [
@@ -73,11 +73,17 @@ let js = '';
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spielplan-test-'));
   try {
-    fs.copyFileSync(VISUALIZE, path.join(tmp, 'visualize_spiele.py'));
-    fs.copyFileSync(CONFIG, path.join(tmp, 'config.py'));
+    for (const f of fs.readdirSync(REPO_ROOT).filter((n) => n.endsWith('.py'))) {
+      fs.copyFileSync(path.join(REPO_ROOT, f), path.join(tmp, f));
+    }
+    fs.cpSync(path.join(REPO_ROOT, 'templates'), path.join(tmp, 'templates'), { recursive: true });
+    for (const dir of ['fonts', 'assets']) {
+      const src = path.join(REPO_ROOT, dir);
+      if (fs.existsSync(src)) fs.cpSync(src, path.join(tmp, dir), { recursive: true });
+    }
     fs.writeFileSync(path.join(tmp, 'tsv-a_spiele_web.csv'), csvFor(fileA), 'utf8');
     fs.writeFileSync(path.join(tmp, 'tsv-b_spiele_web.csv'), csvFor(fileB), 'utf8');
-    execFileSync('python3', ['visualize_spiele.py'], { cwd: tmp, stdio: 'pipe' });
+    execFileSync('python3', [path.basename(MAIN), 'overview'], { cwd: tmp, stdio: 'pipe' });
     renderedHtml = fs.readFileSync(path.join(tmp, 'spielplan.html'), 'utf8');
     const m = renderedHtml.match(/<script>([\s\S]*?)<\/script>/);
     if (!m) throw new Error('no <script> block found in generated HTML');
@@ -151,13 +157,14 @@ function parseSections(html) {
     if (sm[2]) sm[2].split(' ').forEach((c) => c && header.classList.add(c));
     const badge = new FakeElement('span');
     badge.classList.add('badge');
-    const trRe = /<tr[^>]*data-heim="([^"]*)"[^>]*data-gast="([^"]*)"[^>]*>/g;
+    const trRe = /<tr[^>]*data-heim="([^"]*)"[^>]*data-gast="([^"]*)"[^>]*data-owner="([^"]*)"[^>]*>/g;
     let tm;
     const trs = [];
     while ((tm = trRe.exec(sm[3]))) {
       const tr = new FakeElement('tr');
       tr.dataset.heim = tm[1];
       tr.dataset.gast = tm[2];
+      tr.dataset.owner = tm[3];
       trs.push(tr);
     }
     sectionEl.trs = trs;
@@ -241,7 +248,8 @@ function buildScenario(opts = {}) {
   vm.runInContext(
     'globalThis.__dayKey = dayKey; globalThis.__selectedTeams = selectedTeams;' +
       'globalThis.__icsDate = icsDate; globalThis.__icsEscape = icsEscape;' +
-      'globalThis.__icsFold = icsFold; globalThis.__icsEnd = icsEnd;',
+      'globalThis.__icsFold = icsFold; globalThis.__icsEnd = icsEnd;' +
+      'globalThis.__icsEndAt = icsEndAt;',
     ctx,
   );
   return {
@@ -409,6 +417,10 @@ section('.ics export (all teams, hide past)');
   check(txt.includes(`DTSTART;TZID=Europe/Berlin:${lateDk}T220000`), 'late game DTSTART');
   const lateDend = icsEndExpected(late.datum, '22:00');
   check(txt.includes(`DTEND;TZID=Europe/Berlin:${lateDend}`), `late game DTEND rolls over (${lateDend})`);
+  const range = GAMES.find((x) => x.time === '13:00-17:00');
+  const rangeDk = range.datum.split('.').reverse().join('');
+  check(txt.includes(`DTSTART;TZID=Europe/Berlin:${rangeDk}T130000`), 'range game DTSTART from start time');
+  check(txt.includes(`DTEND;TZID=Europe/Berlin:${rangeDk}T170000`), 'range game DTEND from end time');
   check(
     txt.includes('SUMMARY:SV Testfeld U15 - FC Semi\\; Kolon\\, Komma \\\\ Team'),
     'ics escaping of ; , \\ in SUMMARY',

@@ -349,7 +349,15 @@ def test_render_game_row_home():
     assert 'title="Heimspiel"' in row
     assert 'data-heim="SV Testfeld U15"' in row
     assert 'data-gast="FC Gegner"' in row
+    assert 'data-owner=""' in row
     assert "vs</span></td>" in row
+
+
+def test_render_game_row_with_owner():
+    g = make_game("20.09.2026", "10:00", "SV Musterort", "Musterhallencup")
+    g["owners"] = [U15]
+    row = render_html.render_game_row(g, is_hot=False)
+    assert f'data-owner="{U15}"' in row
 
 
 def test_render_game_row_away():
@@ -441,6 +449,15 @@ def test_render_games_js():
     assert "w" in data[0]
     assert "p" in data[0]
     assert "l" in data[0]
+    assert data[0]["o"] == ""
+
+
+def test_render_games_js_includes_owner():
+    game = make_game("20.09.2026", "10:00", "SV Musterort", "Musterhallencup")
+    game["owners"] = [U15]
+    days = {"20.09.2026": [game]}
+    data = json.loads(render_html.render_games_js(days))
+    assert data[0]["o"] == U15
 
 
 def test_embedded_json_cannot_close_the_script_tag():

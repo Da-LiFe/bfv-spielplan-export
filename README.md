@@ -304,6 +304,12 @@ load).
 - `fetch` only ever writes `*_spiele_web.csv`, so extra games survive
   `--refresh`. They flow everywhere the fetched games do: overview HTML/PDF,
   `team` PDF, `captains` duty weeks, `aufstellung` and the `.ics` export.
+- Every game in the file counts as a game of the file's team, so it shows up
+  under that team even when the team is not written in Heim/Gast (e.g. a
+  tournament). Write the club team in Heim or Gast when you want home/away and
+  the opponent detected automatically.
+- Times may be a range (`13:00-17:00`); the overview shows it verbatim and the
+  `.ics` export uses start and end.
 - The file must belong to a team in `teams.json`: a file whose slug is not
   found aborts with an error.
 - Only additions are allowed. If a game is also listed by BFV, loading aborts

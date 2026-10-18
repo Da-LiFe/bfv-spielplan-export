@@ -14,7 +14,7 @@ import sys
 from collections import Counter, OrderedDict
 from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from config import CLUB_MARKERS, PALETTE, SCRIPT_DIR
 from util import game_sort_key, parse_date
@@ -46,6 +46,7 @@ class Game(TypedDict):
     is_home: bool
     home_color: str
     away_color: str
+    owners: NotRequired[list[str]]
 
 
 WEB_SUFFIX = "_spiele_web.csv"
@@ -133,6 +134,15 @@ def resolve_team(sources: list[Source], arg: str) -> Source:
     return matches[0]
 
 
+def game_involves(g: Game, team: str) -> bool:
+    """True when ``team`` plays in ``g`` (Heim/Gast or as the file's owner).
+
+    Games from a ``<slug>_zusatz_spiele.csv`` are owned by that team even when
+    the team is not named in Heim/Gast (e.g. tournament entries).
+    """
+    return team in (g["heim"], g["gast"]) or team in (g.get("owners") or [])
+
+
 def next_games_for_team(
     games: list[Game], team: str, num: int, today: datetime | None = None
 ) -> list[Game]:
@@ -141,7 +151,7 @@ def next_games_for_team(
     upcoming = [
         g
         for g in games
-        if (g["heim"] == team or g["gast"] == team)
+        if game_involves(g, team)
         and (g["date"].date() if isinstance(g["date"], datetime) else g["date"])
         >= today.date()
     ]
@@ -200,6 +210,7 @@ def _read_games(path: Path) -> list[Game]:
                 is_home=any(m in home_l for m in CLUB_MARKERS),
                 home_color=team_color(heim),
                 away_color=team_color(gast),
+                owners=[],
             )
         )
     if skipped:
@@ -304,6 +315,7 @@ def _merge_games(entries: list[Entry]) -> list[Game]:
             continue
         for g in file_games:
             _rename_team(g, source["original"], source["team"])
+            g["owners"] = [source["team"]]
             link_key = ("link", g["link"]) if g["link"] else None
             fallback_key = ("fallback", g["datum"], g["time"], g["heim"], g["gast"])
             kept = (by_link.get(link_key) if link_key else None) or by_fallback.get(
@@ -386,9 +398,7 @@ def short_place(spielort: str, limit: int = 45) -> str:
 def find_team_game(games: list[Game], team: str, day: datetime) -> Game | None:
     """Return the (earliest) game of ``team`` on the given day, if any."""
     matches = [
-        g
-        for g in games
-        if (g["heim"] == team or g["gast"] == team) and g["date"].date() == day.date()
+        g for g in games if game_involves(g, team) and g["date"].date() == day.date()
     ]
     matches.sort(key=lambda g: g["time"] or "99:99")
     return matches[0] if matches else None

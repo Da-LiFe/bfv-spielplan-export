@@ -39,6 +39,7 @@ def render_games_js(days: OrderedDict[str, list[Game]]) -> str:
                 "w": g["wettbewerb"],
                 "p": g["spielort"],
                 "l": g["link"],
+                "o": (g.get("owners") or [""])[0],
             }
             for day in days.values()
             for g in day
@@ -69,8 +70,9 @@ def render_game_row(g: Game, is_hot: bool) -> str:
         if place
         else ""
     )
+    owner = (g.get("owners") or [""])[0]
     return (
-        f'<tr class="{"hot" if is_hot else ""}" data-heim="{esc(g["heim"])}" data-gast="{esc(g["gast"])}">'
+        f'<tr class="{"hot" if is_hot else ""}" data-heim="{esc(g["heim"])}" data-gast="{esc(g["gast"])}" data-owner="{esc(owner)}">'
         f'<td class="time" data-label="Zeit"><span class="cell">{esc(g["time"] or "\u2013")}</span></td>'
         f'<td class="team" data-label="Heim" style="--c:{g["home_color"]}"><span class="cell">{esc(g["heim"])}</span></td>'
         f'<td class="vs" data-label=""><span class="cell">vs</span></td>'

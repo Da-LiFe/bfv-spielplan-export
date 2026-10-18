@@ -864,12 +864,17 @@ def run_lineup(
     )
     info = None
     if game:
-        opponent = game["gast"] if game["heim"] == team else game["heim"]
+        if game["heim"] == team:
+            opponent, is_home = game["gast"], True
+        elif game["gast"] == team:
+            opponent, is_home = game["heim"], False
+        else:
+            opponent, is_home = f"{game['heim']} \u2013 {game['gast']}", False
         info = GameInfo(
             opponent=opponent,
             kickoff=game["time"],
             competition=game["wettbewerb"],
-            is_home=game["heim"] == team,
+            is_home=is_home,
             spielort=game["spielort"],
         )
     else:

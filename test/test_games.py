@@ -314,3 +314,60 @@ def test_zusatz_invalid_rows_warn(script_dir, capsys):
     err = capsys.readouterr().err
     assert f"1 Zeile(n) in {Z_SLUG}_zusatz_spiele.csv wegen ungültigen Datums" in err
     assert f"1 Zeile(n) in {Z_SLUG}_zusatz_spiele.csv ohne Heim/Gast-Team" in err
+
+
+def test_zusatz_game_is_owned_by_its_team(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir,
+        Z_SLUG,
+        [row(d, "SV Musterort", "Musterhallencup", "", "", time="13:00-17:00")],
+    )
+
+    all_games, _, _ = games.load_games()
+
+    assert all_games[0]["owners"] == [Z_ALIAS]
+    assert games.game_involves(all_games[0], Z_ALIAS)
+    assert "SV Musterort" not in all_games[0]["owners"]
+
+
+def test_fetched_games_have_no_owner(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_csv(
+        script_dir / f"{Z_SLUG}_spiele_web.csv",
+        [row(d, A_BFV, "FC Beispiel", Z_URL, "l1")],
+    )
+
+    all_games, _, _ = games.load_games()
+
+    assert all_games[0]["owners"] == []
+
+
+def test_next_games_for_team_includes_owned_game(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir, Z_SLUG, [row(d, "SV Musterort", "Musterhallencup", "", "")]
+    )
+
+    all_games, _, _ = games.load_games()
+    upcoming = games.next_games_for_team(all_games, Z_ALIAS, 4)
+
+    assert [g["gast"] for g in upcoming] == ["Musterhallencup"]
+
+
+def test_find_team_game_includes_owned_game(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir, Z_SLUG, [row(d, "SV Musterort", "Musterhallencup", "", "")]
+    )
+
+    all_games, _, _ = games.load_games()
+    found = games.find_team_game(
+        all_games, Z_ALIAS, datetime.combine(d, datetime.min.time())
+    )
+
+    assert found is not None
+    assert found["gast"] == "Musterhallencup"

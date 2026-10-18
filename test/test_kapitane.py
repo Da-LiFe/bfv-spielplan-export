@@ -195,6 +195,14 @@ def test_teams_duty_weeks_filters_recent():
     assert weeks[TG] == expected
 
 
+def test_teams_duty_weeks_includes_owned_games():
+    sources = make_sources()
+    owned = make_game(3, "SV Musterort", "Turnier")
+    owned["owners"] = [TG]
+    weeks = kapitane.teams_duty_weeks([owned], sources)
+    assert weeks[TG] == [kapitane.duty_week(owned["date"])]
+
+
 def test_check_distribution_balanced():
     cfg = kapitane.CaptainConfig(
         teams={TG: ["A", "B"]},

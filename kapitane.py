@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from config import SCRIPT_DIR, WD
-from games import Game, Source, load_games
+from games import Game, Source, game_involves, load_games
 from util import load_json_lenient, match_team
 
 CONFIG_NAME = "kapitane.json"
@@ -343,7 +343,7 @@ def teams_duty_weeks(
         for g in games:
             raw_d = g["date"]
             d: date = raw_d.date() if hasattr(raw_d, "date") else raw_d
-            if (g["heim"] == team or g["gast"] == team) and d >= today:
+            if game_involves(g, team) and d >= today:
                 weeks.add(duty_week(d))
         if weeks:
             result[team] = sorted(weeks)

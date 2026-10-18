@@ -146,7 +146,7 @@ $sections
       let visible = 0;
       let selectedTeamsOnDay = new Set();
       trs.forEach(tr => {
-        const show = isUnfolded || sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
+        const show = isUnfolded || sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast) || (!!tr.dataset.owner && sel.includes(tr.dataset.owner));
         tr.style.display = show ? '' : 'none';
       });
       trs.forEach(tr => {
@@ -154,6 +154,7 @@ $sections
         visible++;
         if (clubTeamsSet.has(tr.dataset.heim)) selectedTeamsOnDay.add(tr.dataset.heim);
         if (clubTeamsSet.has(tr.dataset.gast)) selectedTeamsOnDay.add(tr.dataset.gast);
+        if (clubTeamsSet.has(tr.dataset.owner)) selectedTeamsOnDay.add(tr.dataset.owner);
       });
       const header = section.querySelector('.day-header');
       const badge = section.querySelector('.badge');
@@ -173,10 +174,11 @@ $sections
           if (hasMultipleVisible && !isUnfolded) {
             const hiddenTeams = new Set();
             trs.forEach(tr => {
-              const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast);
+              const show = sel === null || sel.includes(tr.dataset.heim) || sel.includes(tr.dataset.gast) || (!!tr.dataset.owner && sel.includes(tr.dataset.owner));
               if (!show) {
                 if (clubTeamsSet.has(tr.dataset.heim)) hiddenTeams.add(tr.dataset.heim);
                 if (clubTeamsSet.has(tr.dataset.gast)) hiddenTeams.add(tr.dataset.gast);
+                if (clubTeamsSet.has(tr.dataset.owner)) hiddenTeams.add(tr.dataset.owner);
               }
             });
             if (hiddenTeams.size > 0) {
@@ -267,19 +269,29 @@ $sections
     for (let i = 0; i < s.length; i += 73) out.push(s.slice(i, i + 73));
     return out.join('\r\n ');
   }
-  function icsEnd(d, t) {
-    const [hh, mm] = t.split(':').map(Number);
-    let total = hh * 60 + mm + 120;
-    const extra = Math.floor(total / 1440);
-    total %= 1440;
+  function icsStamp(d, minutes) {
+    const extra = Math.floor(minutes / 1440);
+    const rest = ((minutes % 1440) + 1440) % 1440;
     const [dd, mo, yy] = d.split('.').map(Number);
     const dt = new Date(Date.UTC(yy, mo - 1, dd + extra));
-    return dt.toISOString().slice(0, 10).replace(/-/g, '') + 'T' + String(Math.floor(total / 60)).padStart(2, '0') + String(total % 60).padStart(2, '0') + '00';
+    return dt.toISOString().slice(0, 10).replace(/-/g, '') + 'T' + String(Math.floor(rest / 60)).padStart(2, '0') + String(rest % 60).padStart(2, '0') + '00';
+  }
+  function icsTime(t) {
+    const m = (t || '').match(/^(\d{1,2}):(\d{2})$/);
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  }
+  function icsEnd(d, t) {
+    const start = icsTime(t);
+    return icsStamp(d, (start === null ? 0 : start) + 120);
+  }
+  function icsEndAt(d, start, end) {
+    const e = icsTime(end);
+    return e === null ? icsEnd(d, start) : icsStamp(d, e);
   }
 
   document.getElementById('icsExport').addEventListener('click', function () {
     const sel = selectedTeams();
-    let games = sel === null ? SPIELE : SPIELE.filter(g => sel.includes(g.h) || sel.includes(g.a));
+    let games = sel === null ? SPIELE : SPIELE.filter(g => sel.includes(g.h) || sel.includes(g.a) || (!!g.o && sel.includes(g.o)));
     if (hidePastCheck.checked) {
       games = games.filter(g => dayKey(g.d) >= todayKey);
     }
@@ -308,9 +320,11 @@ $sections
       lines.push('BEGIN:VEVENT');
       lines.push('UID:' + (g.l ? g.l.split('/').pop() : (g.d + g.t)) + '@bfv-spielplan');
       lines.push('DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').replace(/\.[0-9]+Z/, 'Z'));
-      if (g.t) {
-        lines.push('DTSTART;TZID=Europe/Berlin:' + icsDate(g.d) + 'T' + g.t.replace(':', '') + '00');
-        lines.push('DTEND;TZID=Europe/Berlin:' + icsEnd(g.d, g.t));
+      const parts = (g.t || '').split('-').map(s => s.trim());
+      const start = icsTime(parts[0]) === null ? '' : parts[0];
+      if (start) {
+        lines.push('DTSTART;TZID=Europe/Berlin:' + icsDate(g.d) + 'T' + start.replace(':', '') + '00');
+        lines.push('DTEND;TZID=Europe/Berlin:' + (parts[1] ? icsEndAt(g.d, start, parts[1]) : icsEnd(g.d, start)));
       } else {
         lines.push('DTSTART;VALUE=DATE:' + icsDate(g.d));
       }
