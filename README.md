@@ -289,10 +289,34 @@ The lineups live in `aufstellungen.json` (gitignored, kid names); see `aufstellu
 Add the team's BFV URL (e.g. `https://www.bfv.de/mannschaften/.../<id>`) as a
 new object in `teams.json`, optionally with an `alias`, then run `--refresh`.
 
+### Add games by hand (Zusatzspiele)
+
+Games BFV does not list (friendlies, tournaments) go into a
+`<slug>_zusatz_spiele.csv` next to the scripts — the same columns as the
+fetched CSV. `<slug>` is the team's BFV slug, i.e. the fetched file name with
+`_spiele_web` replaced by `_zusatz_spiele`
+(`tsv-gilching-argelsried-2-7_spiele_web.csv` →
+`tsv-gilching-argelsried-2-7_zusatz_spiele.csv`); see
+`zusatz_spiele.example.csv` for the format. Write the club team as its
+`alias` from `teams.json` (or as its original BFV name, which is aliased on
+load).
+
+- `fetch` only ever writes `*_spiele_web.csv`, so extra games survive
+  `--refresh`. They flow everywhere the fetched games do: overview HTML/PDF,
+  `team` PDF, `captains` duty weeks, `aufstellung` and the `.ics` export.
+- The file must belong to a team in `teams.json`: a file whose slug is not
+  found aborts with an error.
+- Only additions are allowed. If a game is also listed by BFV, loading aborts
+  with an error naming the other file, so you can delete the obsolete row.
+- The file is gitignored (your own data); `zusatz_spiele.example.csv` is the
+  committed template.
+
 ## Output
 
 - `*_spiele_web.csv` — raw data per team
   (columns `Wettbewerb,Datum,Uhrzeit,Heim,Gast,Spielort,Link,Quelle`, UTF-8 with BOM)
+- `<slug>_zusatz_spiele.csv` — hand-maintained extra games for one team,
+  read by every command and kept across `fetch --refresh`
 - `spielplan.html` — interactive overview: team filter, hide past games,
   same-day badge (always shown for days with multiple games), amber header
   highlighting only when 2+ selected teams play on the same day, map/match

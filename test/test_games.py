@@ -155,3 +155,162 @@ def test_bare_club_name_in_other_file_is_not_renamed(script_dir):
     all_games, _, _ = games.load_games()
     cup = next(g for g in all_games if g["link"] == "cup")
     assert (cup["heim"], cup["gast"]) == ("Cup FC", A_BFV)
+
+
+# ------------------------------------------------ _zusatz_spiele.csv (extra games)
+
+Z_URL = "https://www.bfv.de/mannschaften/club-a/0123456789abcdef"
+Z_SLUG = "club-a"
+Z_ALIAS = "Club A"
+
+
+def write_zusatz(tmp_path, slug, rows):
+    write_csv(tmp_path / f"{slug}_zusatz_spiele.csv", rows)
+
+
+def write_teams(tmp_path):
+    teams = [{"url": Z_URL, "alias": Z_ALIAS}]
+    (tmp_path / "teams.json").write_text(json.dumps(teams), encoding="utf-8")
+
+
+def test_zusatz_adds_game_to_fetched_team(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_csv(
+        script_dir / f"{Z_SLUG}_spiele_web.csv",
+        [row(d, A_BFV, "FC Beispiel", Z_URL, "l1")],
+    )
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir,
+        Z_SLUG,
+        [row(d + timedelta(days=2), Z_ALIAS, "FC Extra", "", "", time="11:00")],
+    )
+
+    all_games, club_teams, sources = games.load_games()
+
+    assert club_teams == [Z_ALIAS]
+    assert len(sources) == 1
+    assert sources[0]["file"] == f"{Z_SLUG}_spiele_web.csv"
+    assert sources[0]["url"] == Z_URL
+    extra = next(g for g in all_games if g["gast"] == "FC Extra")
+    assert extra["heim"] == Z_ALIAS
+    assert extra["source"] == f"{Z_SLUG}_zusatz_spiele.csv"
+
+
+def test_zusatz_only_team_gets_alias_and_source(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_teams(script_dir)
+    write_zusatz(script_dir, Z_SLUG, [row(d, Z_ALIAS, "FC Extra", "", "")])
+
+    all_games, club_teams, sources = games.load_games()
+
+    assert club_teams == [Z_ALIAS]
+    assert sources[0]["file"] == f"{Z_SLUG}_zusatz_spiele.csv"
+    assert sources[0]["url"] == Z_URL
+    assert (all_games[0]["heim"], all_games[0]["gast"]) == (Z_ALIAS, "FC Extra")
+
+
+def test_zusatz_bfv_name_is_aliased(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_csv(
+        script_dir / f"{Z_SLUG}_spiele_web.csv",
+        [row(d, A_BFV, "FC Beispiel", Z_URL, "l1")],
+    )
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir, Z_SLUG, [row(d + timedelta(days=7), A_BFV, "FC Extra", "", "")]
+    )
+
+    all_games, _, _ = games.load_games()
+
+    extra = next(g for g in all_games if g["gast"] == "FC Extra")
+    assert extra["heim"] == Z_ALIAS
+
+
+def test_zusatz_survives_refresh(script_dir):
+    d = date.today() + timedelta(days=5)
+    fetched = script_dir / f"{Z_SLUG}_spiele_web.csv"
+    write_csv(fetched, [row(d, A_BFV, "FC Beispiel", Z_URL, "l1")])
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir, Z_SLUG, [row(d + timedelta(days=2), Z_ALIAS, "FC Extra", "", "")]
+    )
+
+    games.load_games()
+    # A refresh rewrites the fetched file; the zusatz file is not touched.
+    write_csv(fetched, [row(d + timedelta(days=9), A_BFV, "FC New", Z_URL, "l9")])
+    all_games, _, _ = games.load_games()
+
+    gasts = {g["gast"] for g in all_games}
+    assert "FC Extra" in gasts
+    assert "FC New" in gasts
+    assert "FC Beispiel" not in gasts
+
+
+def test_fetched_vs_fetched_still_dedupes_silently(script_dir):
+    d = date.today() + timedelta(days=3)
+    write_two_club_teams(script_dir, "https://x/1")
+    all_games, _, _ = games.load_games()
+    assert [g["date"].date() for g in all_games].count(d) == 1
+
+
+@pytest.mark.parametrize(
+    "extra_heim, extra_link",
+    [(Z_ALIAS, ""), (A_BFV, ""), (Z_ALIAS, "l1")],
+    ids=["alias-no-link", "bfv-name-no-link", "same-link"],
+)
+def test_zusatz_duplicate_of_fetched_aborts(script_dir, extra_heim, extra_link):
+    d = date.today() + timedelta(days=5)
+    write_csv(
+        script_dir / f"{Z_SLUG}_spiele_web.csv",
+        [row(d, A_BFV, "FC Beispiel", Z_URL, "l1")],
+    )
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir, Z_SLUG, [row(d, extra_heim, "FC Beispiel", "", extra_link)]
+    )
+
+    with pytest.raises(SystemExit, match="steht schon in"):
+        games.load_games()
+
+
+def test_zusatz_duplicate_within_file_aborts(script_dir):
+    d = date.today() + timedelta(days=5)
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir,
+        Z_SLUG,
+        [row(d, Z_ALIAS, "FC Extra", "", ""), row(d, Z_ALIAS, "FC Extra", "", "")],
+    )
+
+    with pytest.raises(SystemExit, match="steht schon in"):
+        games.load_games()
+
+
+def test_zusatz_unknown_slug_aborts(script_dir):
+    write_teams(script_dir)
+    write_zusatz(
+        script_dir,
+        "ghost",
+        [row(date.today() + timedelta(days=5), "Ghost", "FC Extra", "", "")],
+    )
+
+    with pytest.raises(SystemExit, match="kein Team mit dem Slug 'ghost'"):
+        games.load_games()
+
+
+def test_zusatz_invalid_rows_warn(script_dir, capsys):
+    write_teams(script_dir)
+    bad = row(date.today() + timedelta(days=5), Z_ALIAS, "FC Extra", "", "")
+    bad["Datum"] = "kaputt"
+    no_team = row(date.today() + timedelta(days=6), Z_ALIAS, "", "", "")
+    write_zusatz(script_dir, Z_SLUG, [bad, no_team])
+
+    all_games, club_teams, sources = games.load_games()
+
+    assert all_games == []
+    assert club_teams == []
+    assert sources == []
+    err = capsys.readouterr().err
+    assert f"1 Zeile(n) in {Z_SLUG}_zusatz_spiele.csv wegen ungültigen Datums" in err
+    assert f"1 Zeile(n) in {Z_SLUG}_zusatz_spiele.csv ohne Heim/Gast-Team" in err
