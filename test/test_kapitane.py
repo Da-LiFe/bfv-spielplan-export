@@ -148,14 +148,56 @@ def test_round_robin_keeps_unknown_existing_names():
     assert result["2026-02"] == "A"
 
 
-def test_round_robin_ignores_past_assignments():
-    """Assignments for weeks outside the target set must not affect balance."""
+def test_round_robin_continues_rotation_from_past():
+    """The last past duty seeds the rotation so it is not repeated next week."""
     roster = ["A", "B"]
     upcoming = ["2026-37", "2026-38"]
     existing = {"2026-01": "A", "2026-02": "A", "2026-03": "A"}
     result = kapitane.assign_round_robin(upcoming, roster, existing)
-    assert result["2026-37"] == "A"
-    assert result["2026-38"] == "B"
+    assert result["2026-37"] == "B"
+    assert result["2026-38"] == "A"
+    assert result["2026-01"] == "A"  # past weeks stay untouched
+
+
+def test_round_robin_second_turn_after_everyone_else():
+    """No kid repeats until every roster member has had one turn."""
+    roster = ["A", "B", "C"]
+    weeks = [f"2026-{n:02d}" for n in range(1, 8)]
+    result = kapitane.assign_round_robin(weeks, roster, {})
+    served = [result[w] for w in weeks]
+    assert served == ["A", "B", "C", "A", "B", "C", "A"]
+
+
+def test_round_robin_gap_reassigns_follow_ups():
+    """A gap recomputes the weeks after it and avoids a repeat."""
+    roster = ["A", "B"]
+    weeks = ["2026-01", "2026-02", "2026-03"]
+    existing = {"2026-01": "A", "2026-03": "B"}
+    result = kapitane.assign_round_robin(weeks, roster, existing)
+    assert result["2026-01"] == "A"  # before the gap: kept
+    assert result["2026-02"] == "B"  # gap filled without repeating A
+    assert result["2026-03"] == "A"  # hand-filled follow-up is recomputed
+
+
+def test_round_robin_gap_keeps_prefix_and_past():
+    roster = ["A", "B", "C", "D"]
+    weeks = ["2026-10", "2026-11", "2026-12", "2026-13"]
+    existing = {"2026-05": "A", "2026-10": "A", "2026-11": "B", "2026-13": "D"}
+    result = kapitane.assign_round_robin(weeks, roster, existing)
+    assert result["2026-05"] == "A"  # past
+    assert result["2026-10"] == "A"  # prefix before the gap (2026-12)
+    assert result["2026-11"] == "B"
+    assert result["2026-12"] == "C"
+    assert result["2026-13"] == "D"  # recomputed, rotation continues
+
+
+def test_round_robin_is_idempotent_after_gap():
+    roster = ["A", "B"]
+    weeks = ["2026-01", "2026-02", "2026-03"]
+    existing = {"2026-01": "A", "2026-03": "B"}
+    once = kapitane.assign_round_robin(weeks, roster, existing)
+    twice = kapitane.assign_round_robin(weeks, roster, dict(once))
+    assert once == twice
 
 
 def test_ensure_assignments_fills_and_is_idempotent():

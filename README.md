@@ -166,9 +166,13 @@ Old flat format (`["Lena", "Max", "Noah"]`) is still supported for reading —
 ```
 
 - `captains --assign` loads the current CSVs and fills any duty week that has an
-  upcoming game but no captain yet — round-robin, always giving the week to the
-  kid with the fewest appointments (fair by construction). Weeks you filled by
-  hand are never overwritten.
+  upcoming game but no captain yet, round-robin: the week goes to the kid who has
+  been off duty the longest, so a kid only takes a second turn once every other
+  roster member has had one. The most recent past duty counts too, so next week
+  never repeats this week's captain. Past weeks are never modified, and
+  hand-filled weeks before a gap stay as they are. When a duty week is missing
+  *after* an already assigned one, the weeks from that gap onward are computed
+  again so the rotation keeps going without repeats.
 - `captains --check` counts, per team, how many weeks each kid is on duty (only
   weeks with an actual game count) and reports `gleichmäßig` when no kid has more
   than one duty week more than another. It flags missing assignments, kids not in

@@ -160,7 +160,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--assign",
         action="store_true",
-        help="fehlende Wochen in kapitane.json reihum zuteilen",
+        help=(
+            "fehlende Wochen reihum zuteilen; eine Lücke setzt die Zuteilung "
+            "ab dort fort"
+        ),
     )
     p.add_argument(
         "--check",

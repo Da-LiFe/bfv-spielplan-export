@@ -4,7 +4,8 @@ One kid per team acts as "Kapitän" for the whole calendar week
 (Monday–Sunday) in which the game takes place. The team rosters live in
 ``roster.json``, the week→kid assignments in ``kapitane.json``. Weeks without
 an explicit captain are filled round-robin so the duty is distributed fairly
-across the team's roster.
+across the team's roster: someone takes a second turn only after every other
+roster member has had one.
 """
 
 from __future__ import annotations
@@ -208,24 +209,55 @@ def save_config(cfg: CaptainConfig, path: Path | None = None) -> None:
 def assign_round_robin(
     weeks: list[str], roster: list[str], existing: dict[str, str]
 ) -> dict[str, str]:
-    """Fill the weeks missing from ``existing`` with the roster's fairest kid.
+    """Fill missing duty weeks, continuing the rotation across gaps.
 
-    Each missing week goes to the kid with the fewest assignments so far
-    (ties broken by roster order), so the result is balanced by construction.
-    Only counts assignments for the weeks being processed.
+    Each week goes to the kid who has been off duty the longest: a kid who
+    never had a turn comes first, otherwise the one whose last duty lies
+    furthest back (ties broken by roster order).  A kid therefore only gets a
+    second turn once every other roster member has had one.
+
+    Weeks outside *weeks* are past weeks and are never modified.  A missing
+    week that follows an already assigned one is a gap: from there on the
+    weeks are assigned anew so the rotation keeps going, while everything
+    before the gap stays untouched.
     """
-    counts = {kid: 0 for kid in roster}
-    week_set = set(weeks)
-    for wk, kid in existing.items():
-        if wk in week_set and kid in counts:
-            counts[kid] += 1
+    future = sorted(set(weeks))
+    future_set = set(future)
     result = dict(existing)
-    for week in sorted(set(weeks)):
-        if week in result:
+
+    zone_start: str | None = None
+    assigned_seen = False
+    for week in future:
+        if week in existing:
+            assigned_seen = True
+        elif assigned_seen:
+            zone_start = week
+            break
+    keep = {
+        week
+        for week in future
+        if week in existing and (zone_start is None or week < zone_start)
+    }
+
+    order = {kid: i for i, kid in enumerate(roster)}
+    last_seen: dict[str, str] = {}
+    for week in sorted(wk for wk in existing if wk not in future_set):
+        kid = existing[week]
+        if kid in order:
+            last_seen[kid] = week
+
+    for week in future:
+        if week in keep:
+            kid = existing[week]
+            if kid in order:
+                last_seen[kid] = week
             continue
-        kid = min(roster, key=lambda k: counts[k])
+        kid = min(
+            roster,
+            key=lambda k: (k in last_seen, last_seen.get(k, ""), order[k]),
+        )
         result[week] = kid
-        counts[kid] += 1
+        last_seen[kid] = week
     return result
 
 
