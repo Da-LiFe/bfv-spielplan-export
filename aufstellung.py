@@ -74,7 +74,7 @@ PITCH_LINE = "#b8bec9"
 # playing field. x runs from the left to the right touchline, y from the own
 # goal line (0, bottom of the page) to the opponent's goal line (1).
 POSITIONS: dict[str, tuple[float, float]] = {
-    "TOR": (0.5, 0.06),
+    "TOR": (0.5, 0.07),
     "TW": (0.5, 0.06),
     "LV": (0.14, 0.24),
     "IV": (0.5, 0.2),
@@ -91,9 +91,24 @@ POSITIONS: dict[str, tuple[float, float]] = {
     "RF": (0.84, 0.74),
     "LA": (0.16, 0.78),
     "RA": (0.84, 0.78),
-    "9ER": (0.5, 0.84),
+    "9ER": (0.5, 0.90),
     "ST": (0.5, 0.84),
     "MS": (0.5, 0.84),
+}
+
+# Dedicated positions map for 9v9 games
+POSITIONS_9V9: dict[str, tuple[float, float]] = {
+    "TOR": (0.5, 0.07),
+    "TW": (0.5, 0.07),
+    "LV": (0.14, 0.24),
+    "IV": (0.5, 0.2),
+    "RV": (0.86, 0.24),
+    "6ER": (0.5, 0.4),
+    "8ER": (0.5, 0.56),
+    "10ER": (0.5, 0.66),
+    "LF": (0.16, 0.60),
+    "RF": (0.84, 0.60),
+    "9ER": (0.5, 0.68),
 }
 
 # Compact 7v7 positions (3-2-1): attackers pulled closer to midfield
@@ -365,6 +380,10 @@ def _is_7v7(lineup: Lineup) -> bool:
     size = system_size(lineup.system)
     return size is not None and size == 7
 
+def _is_9v9(lineup: Lineup) -> bool:
+    """Return True if the lineup uses a 9v9 system (9 players incl. keeper)."""
+    size = system_size(lineup.system)
+    return size is not None and size == 9
 
 def place_players(lineup: Lineup) -> list[PlacedPlayer]:
     """Compute pitch coordinates for every starter from their position code.
@@ -373,7 +392,12 @@ def place_players(lineup: Lineup) -> list[PlacedPlayer]:
     code's spot in ``startelf`` order; unknown codes go to a row in midfield.
     7v7 lineups use compact positions with attackers closer to midfield.
     """
-    positions_map = POSITIONS_7V7 if _is_7v7(lineup) else POSITIONS
+    if _is_7v7(lineup):
+        positions_map = POSITIONS_7V7
+    elif _is_9v9(lineup):
+        positions_map = POSITIONS_9V9
+    else:
+        positions_map = POSITIONS
     groups: dict[str, list[Starter]] = {}
     for s in lineup.startelf:
         code = s.pos.upper()
